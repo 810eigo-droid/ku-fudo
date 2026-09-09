@@ -23,3 +23,43 @@ footer{padding-bottom:65px}
  .back-to-top{right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:44px;height:44px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.lesson{transition:none}}
+
+
+/* A clear member-site entrance; only the compact menu stays fixed on phones. */
+.mobile-identity{display:none}
+.desktop-identity{font-size:16px;font-weight:700}
+.entrance-heading{margin-bottom:22px}
+.entrance-heading h1{font-family:inherit;font-size:32px;line-height:1.4;letter-spacing:0}
+.entrance-heading .lead{font-size:16px;margin-top:10px}
+.entrance-links{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:14px;margin-bottom:32px}
+.entrance-link{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0;padding:24px 20px;border:1px solid #bac7d0;border-radius:10px;background:white;box-shadow:0 3px 10px #142c4008}
+.entrance-link strong{display:block;font-size:19px;line-height:1.5}
+.entrance-link div>span{display:block;color:#536676;font-size:14px;margin-top:6px}
+.entrance-link:hover{border-color:#957840;background:#fcfaf5}
+.entrance-chat{background:var(--navy);border-color:var(--navy);color:white}
+.entrance-chat div>span{color:#d4dee5}
+.entrance-chat:hover{background:#263f53}
+.entrance-arrow{font-size:24px;color:#96773b;flex-shrink:0}
+.entrance-chat .entrance-arrow{color:#dfc58e}
+@media(min-width:721px) and (max-width:1100px){.entrance-links{grid-template-columns:1fr 1fr}.entrance-chat{grid-column:1/-1}}
+@media(max-width:720px){
+ .mobile-identity{display:flex;align-items:center;gap:14px;background:white;padding:12px 20px;border-top:4px solid var(--gold)}
+ .mobile-identity>a{font-family:serif;font-size:27px;font-weight:700;letter-spacing:.12em;line-height:1.5}
+ .mobile-identity>span{font-size:14px;color:#536676;border-left:1px solid #bdc8d0;padding-left:14px}
+ .workspace>header{display:none}
+ main{padding:23px 20px}
+ .entrance-heading{margin-bottom:18px}
+ .entrance-heading h1{font-size:clamp(1.375rem,6.3vw,1.75rem);line-height:1.45}
+ .entrance-heading .lead{font-size:16px;line-height:1.7;margin-top:8px}
+ .entrance-links{grid-template-columns:1fr;gap:10px;margin-bottom:26px}
+ .entrance-link{padding:13px 17px;min-height:76px}
+ .entrance-link strong{font-size:19px}
+ .entrance-link div>span{font-size:14px;margin-top:2px}
+ .entrance-chat strong{font-size:21px}
+ .intro{padding:22px;gap:18px}
+ .intro h2{font-family:inherit;font-size:22px;letter-spacing:0}
+}
+
+.orchid-mark{object-fit:contain;flex-shrink:0}
+.workspace>header{padding-top:8px;padding-bottom:8px}
+@media(max-width:720px){.mobile-identity{gap:10px}.mobile-identity .orchid-mark{margin-left:auto;width:72px;height:48px}.mobile-identity>span{padding-left:10px}}
