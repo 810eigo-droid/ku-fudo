@@ -21,7 +21,7 @@ if ($method === 'GET') {
         foreach ($messages as &$message) {
             if ((int)$message['hidden']) { foreach (['body','title','area','event_at','zoom_url','parent_preview'] as $key) { $message[$key]=''; } }
         } unset($message);
-        $events = query("SELECT id,title,area,event_at,zoom_url FROM messages WHERE room=? AND kind='notice' AND hidden=0 AND event_at>=? ORDER BY event_at LIMIT 20", [$room,date('Y-m-d\TH:i')])->fetchAll();
+        $events = query("SELECT id,title,area,event_at,zoom_url,substr(body,1,160) AS description FROM messages WHERE room=? AND kind='notice' AND hidden=0 AND event_at>=? ORDER BY event_at LIMIT 20", [$room,date('Y-m-d\TH:i')])->fetchAll();
         output(['messages' => $messages, 'more' => $more, 'events' => $events, 'user' => publicUser($user)]);
     }
     if ($action === 'users') {

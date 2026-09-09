@@ -80,7 +80,7 @@ try{
  await request('admin','post',{room:'all',kind:'notice',title:'不正リンク',body:'test',zoom_url:'javascript:alert(1)'},400);
  await request('admin','post',{room:'all',kind:'notice',title:'不正日時',body:'test',event_at:'2099-02-30T12:00'},400);
  const board=await request('candidate','feed',null,200,'&room=board');const boardId=Number(board.messages[0].id);assert.equal(board.events.length,1);
- const all=await request('member','feed',null,200,'&room=all');assert(!JSON.stringify(all).includes('SECRET'));assert.equal(all.events[0].title,'全体Zoom');const allId=Number(all.messages[0].id);
+ const all=await request('member','feed',null,200,'&room=all');assert(!JSON.stringify(all).includes('SECRET'));assert.equal(all.events[0].title,'全体Zoom');assert.equal(all.events[0].description,'公開テスト案内');const allId=Number(all.messages[0].id);
  await request('member','feed',null,403,'&room=board');
  await request('member','post',{room:'board',body:'侵入',kind:'chat'},403);
  await request('member','post',{room:'all',body:'誤った返信',parent_id:boardId},404);
