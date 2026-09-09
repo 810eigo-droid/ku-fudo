@@ -40,7 +40,7 @@ if (!is_array($data)) { fail('入力形式が不正です。'); }
 if ($action === 'setup' || $action === 'login') {
     $ip = hash('sha256', (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
     limitAttempt('auth:'.$ip, 20, 900);
-    $login = loginValue($data); $password = passwordValue($data);
+    $login = loginValue($data, $action === 'login'); $password = passwordValue($data, $action !== 'login');
     if ($action === 'setup') {
         if (query('SELECT 1 FROM users LIMIT 1')->fetchColumn()) { fail('初期設定は完了しています。',403); }
         $key = value($data,'setup_key',200,true);
@@ -58,7 +58,7 @@ if ($action === 'setup' || $action === 'login') {
         limitAttempt('login:'.hash('sha256',$login), 15, 900);
         $user=query('SELECT * FROM users WHERE login=?',[$login])->fetch();
         $hash=$user['password'] ?? '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
-        if (!password_verify($password,$hash) || !$user || !(int)$user['active']) { fail('ログインIDまたはパスワードを確認してください。',401); }
+        if (!password_verify($password,$hash) || !$user || !(int)$user['active']) { fail('メールアドレス（従来のID）またはパスワードを確認してください。',401); }
     }
     signIn($user); output(['ok'=>true,'csrf'=>$_SESSION['csrf']]);
 }
@@ -78,6 +78,15 @@ if ($action === 'password') {
     query('UPDATE users SET password=?,must_change=0,version=version+1 WHERE id=?',[password_hash($password,PASSWORD_DEFAULT),$user['id']]);
     audit((int)$user['id'],'password',(int)$user['id']); $db->commit();
     signIn(query('SELECT * FROM users WHERE id=?',[$user['id']])->fetch()); output(['ok'=>true,'csrf'=>$_SESSION['csrf']]);
+}
+if ($action === 'email') {
+    $login=loginValue($data);$password=passwordValue($data, false);
+    if (!password_verify($password,$user['password'])) { fail('現在のパスワードが正しくありません。',403); }
+    if ($login === $user['login']) { fail('現在と異なるメールアドレスを入力してください。'); }
+    if (query('SELECT id FROM users WHERE login=? AND id<>?',[$login,$user['id']])->fetchColumn()) { fail('このメールアドレスは使われています。'); }
+    query('UPDATE users SET login=?,version=version+1 WHERE id=?',[$login,$user['id']]);
+    audit((int)$user['id'],'email',(int)$user['id']);$db->commit();
+    signIn(query('SELECT * FROM users WHERE id=?',[$user['id']])->fetch());output(['ok'=>true,'csrf'=>$_SESSION['csrf']]);
 }
 if ($action === 'post') {
     $room=value($data,'room',10,true);roomCheck($user,$room);
@@ -101,7 +110,7 @@ if ($action === 'post') {
 } elseif ($action === 'user_create') {
     requireAdmin($user);$login=loginValue($data);$name=value($data,'name',60,true);$role=value($data,'role',15,true);
     if (!in_array($role,['member','candidate','director','admin'],true)) { fail('権限を確認してください。'); }
-    if (query('SELECT id FROM users WHERE login=?',[$login])->fetchColumn()) { fail('このログインIDは使われています。'); }
+    if (query('SELECT id FROM users WHERE login=?',[$login])->fetchColumn()) { fail('このメールアドレスは使われています。'); }
     $temporary=bin2hex(random_bytes(10));
     query('INSERT INTO users(login,name,password,role,must_change,created_at) VALUES(?,?,?,?,1,?)',[$login,$name,password_hash($temporary,PASSWORD_DEFAULT),$role,time()]);
     audit((int)$user['id'],'user_create',(int)$db->lastInsertId());$db->commit();output(['ok'=>true,'temporary_password'=>$temporary]);

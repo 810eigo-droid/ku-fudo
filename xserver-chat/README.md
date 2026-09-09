@@ -28,7 +28,7 @@ Zoom会議自体を作成する機能ではなく、既に用意した参加リ�
 
 ## 1. 設置前に
 
-- 対象：810eigo.online の専用フォルダ。既存WordPressは変更しません。
+- 対象：taf-design.com の専用フォルダ。既存WordPressは変更しません。
 - 必要：HTTPS、PHP 8.2以上のサポート中バージョン、PDO SQLite、mbstring、非公開ディレクトリへの書き込み権限。
 - PHPバージョンを変更する場合、同ドメインのWordPressへの影響を先に確認してください。
 - エックスサーバーのWAFを一括で無効にしないでください。操作が拒否された場合はログと対象ルールを確認します。
@@ -41,8 +41,8 @@ GitHubで Code → Download ZIP を選び、PCで展開します。
 
 | 保存先 | 入れるもの |
 |---|---|
-| `810eigo.online/public_html/ku-fudo-chat/` | このフォルダ内の `ku-fudo-chat` にある全ファイル（.htaccessも含む） |
-| `810eigo.online/ku-fudo-private/config.php` | `private-template/config.php.example` を編集してconfig.phpに改名したもの |
+| `taf-design.com/public_html/ku-fudo-chat/` | このフォルダ内の `ku-fudo-chat` にある全ファイル（.htaccessも含む） |
+| `taf-design.com/ku-fudo-private/config.php` | `private-template/config.php.example` を編集してconfig.phpに改名したもの |
 
 **ku-fudo-privateはpublic_htmlの中ではなく、public_htmlと同じ階層です。**
 会話・会員情報・セッションはここへ保存します。フォルダ名・配置は変更しないでください。
@@ -58,15 +58,15 @@ config.php.example の空欄 `setup_key` に、パスワードマネージャー
 
 ## 4. 管理者の登録
 
-1. `https://810eigo.online/ku-fudo-chat/` を開きます（設置後のみ有効）。
-2. 初期設定キー、管理者の表示名、ログインID、パスワードを入力します。
+1. `https://taf-design.com/ku-fudo-chat/` を開きます（設置後のみ有効）。
+2. 初期設定キー、管理者の表示名、メールアドレス、パスワードを入力します。
 3. 初期設定が完了したら、非公開config.phpの `setup_key` を空文字に戻します。
 4. 必要な会員を「アカウント → 会員管理」で追加します。
-5. ログインIDと発行された仮パスワードを、本人にだけ別途伝えます。チャット全体に投稿しないでください。
+5. メールアドレスと発行された仮パスワードを、本人にだけ別途伝えます。チャット全体に投稿しないでください。
 6. 会員は初回ログイン時に自分のパスワードへ変更します。
 
 管理者の権限は運営担当者にのみ付与してください。一般会員に自由登録させない方式です。
-パスワードは12〜72バイト。英数字なら12〜72文字ですが、日本語は1文字が複数バイトです。
+新しく設定するパスワードは8文字以上、最大72バイトです。英数字なら8〜72文字です。日本語も文字数で判定し、8文字未満は受け付けません。既存パスワードでのログインには新しい最低文字数を遡って適用しません。
 通常のログインは最大12時間で失効します。Cookie・セッションを使用します。
 管理者が全員ログインできなくなった場合は、DBを削除して再設定せず、サーバー管理者に復旧を依頼してください。
 
@@ -112,3 +112,13 @@ GitHub PagesへPHPを置いても実行されません。動作確認はエッ�
 - [PHPのパスワードハッシュ](https://www.php.net/manual/en/function.password-hash.php)
 - [PHPセッションのセキュリティ設定](https://www.php.net/manual/en/session.security.ini.php)
 - [PDO SQLite](https://www.php.net/manual/en/ref.pdo-sqlite.php)
+
+
+## 2026-09-09 メールアドレスログインへの更新
+
+- 新規管理者・会員はメールアドレスで登録します。前後の空白を除き、小文字に統一して重複を防ぎます。メール確認・メール送信はありません。
+- 登録済みの従来IDはそのままログインできます。「アカウント → ログイン用メールアドレスを設定・変更する」で、メールアドレスと現在のパスワードを入力して切り替えてください。仮パスワードの場合は先にパスワードを変更します。
+- メールアドレス変更後は旧IDでのログインと他端末の既存セッションが無効になります。投稿・権限・会員番号は変わりません。
+- 更新するファイルは `api.php`、`bootstrap.php`、`index.php`、`chat.js` の4つです。`taf-design.com/public_html/ku-fudo-chat/` 内の同名ファイルを上書きします。更新中は利用を控え、4つすべてを入れ替えてから画面を再読み込みしてください。
+- `ku-fudo-private` 内の `config.php`・`chat.sqlite`・`sessions` は変更・削除しません。データベース再作成や初期設定のやり直しは不要です。
+- エックスサーバーへのアップロードは手動です。GitHubの更新だけでは設置済みチャットには反映されません。

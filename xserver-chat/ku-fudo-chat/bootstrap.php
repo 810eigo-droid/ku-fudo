@@ -86,13 +86,16 @@ function value(array $data, string $name, int $max, bool $required = false): str
     if (!is_string($v) || !mb_check_encoding($v, 'UTF-8') || mb_strlen($v) > $max || str_contains($v, "\0")) { fail('入力形式・文字数を確認してください。'); }
     $v = trim($v); if ($required && $v === '') { fail('必須項目を入力してください。'); } return $v;
 }
-function passwordValue(array $data): string {
+function passwordValue(array $data, bool $newPassword = true): string {
     $v = $data['password'] ?? '';
-    if (!is_string($v) || strlen($v) < 12 || strlen($v) > 72 || str_contains($v, "\0")) { fail('パスワードは12〜72バイトで入力してください。'); } return $v;
+    if (!is_string($v) || !mb_check_encoding($v, 'UTF-8') || $v === '' || strlen($v) > 72 || str_contains($v, "\0") || ($newPassword && mb_strlen($v, 'UTF-8') < 8)) { fail('パスワードは8文字以上、72バイト以内で入力してください。'); } return $v;
 }
-function loginValue(array $data): string {
-    $v = strtolower(value($data, 'login', 60, true));
-    if (!preg_match('/\A[a-z0-9][a-z0-9._-]{2,59}\z/D', $v)) { fail('ログインIDは半角英数字・ドット・ハイフン・下線で3〜60文字にしてください。'); } return $v;
+function loginValue(array $data, bool $allowLegacy = false): string {
+    $v = strtolower(value($data, 'login', 254, true));
+    if (filter_var($v, FILTER_VALIDATE_EMAIL) !== false) { return $v; }
+    // Keep existing accounts accessible until their owners switch to an email address.
+    if ($allowLegacy && preg_match('/\A[a-z0-9][a-z0-9._-]{2,59}\z/D', $v)) { return $v; }
+    fail('有効なメールアドレスを入力してください。');
 }
 function limitAttempt(string $bucket, int $max, int $seconds): void {
     global $db;

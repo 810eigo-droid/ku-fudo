@@ -31,18 +31,50 @@ try{
  await request('anon','feed',null,401,'&room=all');
  const state=await request('admin','state');assert.equal(state.setup,true);
  assert(jars.admin.cookie.startsWith('KU_FUDO_CHAT='));
- await request('admin','setup',{setup_key:'invalid',login:'admin',name:'運営テスト',password:'Administrator-test-123'},403);
- await request('admin','setup',{setup_key:setupKey,login:'admin',name:'運営テスト',password:'Administrator-test-123'});
+ await request('admin','setup',{setup_key:'invalid',login:'admin@example.com',name:'運営テスト',password:'Admin123'},403);
+ await request('admin','setup',{setup_key:setupKey,login:'not-an-email',name:'運営テスト',password:'Admin123'},400);
+ await request('admin','setup',{setup_key:setupKey,login:'admin@example.com',name:'運営テスト',password:'1234567'},400);
+ await request('admin','setup',{setup_key:setupKey,login:'admin@example.com',name:'運営テスト',password:'Admin123'});
  const admin=await request('admin','state');assert.equal(admin.user.role,'admin');
- await request('admin','setup',{setup_key:setupKey,login:'another',name:'別管理者',password:'Administrator-test-123'},403);
+ await request('admin','setup',{setup_key:setupKey,login:'another@example.com',name:'別管理者',password:'Admin123'},403);
  const members={};
  for(const role of ['member','candidate','director']){
-  const created=await request('admin','user_create',{login:role,name:'テスト '+role,role});
-  await request(role,'state');await request(role,'login',{login:role,password:created.temporary_password});
+  const created=await request('admin','user_create',{login:role+'@example.com',name:'テスト '+role,role});
+  await request(role,'state');await request(role,'login',{login:role+'@example.com',password:created.temporary_password});
   await request(role,'feed',null,403,'&room=all');
   await request(role,'password',{old_password:created.temporary_password,password:'New-password-'+role+'-123'});
   members[role]=(await request(role,'state')).user;
  }
+ // Email validation, case normalization, password character boundaries and session invalidation.
+ await request('admin','user_create',{login:'not-an-email',name:'invalid',role:'member'},400);
+ await request('admin','user_create',{login:' MEMBER@EXAMPLE.COM ',name:'duplicate',role:'member'},400);
+ const mailUser=await request('admin','user_create',{login:' Mixed+Tag@Example.com ',name:'メールテスト',role:'member'});
+ await request('mail','state');await request('mail','login',{login:'MIXED+TAG@EXAMPLE.COM',password:mailUser.temporary_password});
+ await request('mail','email',{login:'new@example.com',password:mailUser.temporary_password},403);
+ for(const password of ['1234567','あいうえおかき','a'.repeat(73)])await request('mail','password',{old_password:mailUser.temporary_password,password},400);
+ await request('mail','password',{old_password:mailUser.temporary_password,password:'12345678'});
+ await request('mail','password',{old_password:'12345678',password:'あいうえおかきく'});
+ await request('mailOther','state');await request('mailOther','login',{login:'mixed+tag@example.com',password:'あいうえおかきく'});
+ const mailId=(await request('mail','state')).user.id;
+ await request('mail','post',{room:'all',body:'email migration persistence'});
+ await request('mail','email',{login:'new@example.com',password:'wrong-password'},403);
+ await request('mail','email',{login:'ADMIN@EXAMPLE.COM',password:'あいうえおかきく'},400);
+ await request('mail','email',{login:'bad-email',password:'あいうえおかきく'},400);
+ await request('mail','email',{login:' New@Example.com ',password:'あいうえおかきく'});
+ const changed=(await request('mail','state')).user;assert.equal(changed.login,'new@example.com');assert.equal(changed.id,mailId);assert.equal(changed.role,'member');
+ await request('mailOther','feed',null,401,'&room=all');
+ await request('mailOther','state');await request('mailOther','login',{login:'mixed+tag@example.com',password:'あいうえおかきく'},401);
+ await request('mailOther','login',{login:'NEW@EXAMPLE.COM',password:'あいうえおかきく'});
+ const retained=await request('mailOther','feed',null,200,'&room=all');assert(retained.messages.some(m=>m.body==='email migration persistence'));
+ await request('mailOther','feed',null,403,'&room=board');
+ // Simulate the existing v1 database without reinitializing it. Old policy accepted 4 Japanese characters (12 bytes).
+ const legacySeed=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$s=$db->prepare("INSERT INTO users(login,name,password,role,created_at) VALUES(?,?,?,'admin',?)");$s->execute(['legacy-admin','従来管理者',password_hash('あいうえ',PASSWORD_DEFAULT),time()]);echo 'ok';`});assert.equal(legacySeed.text,'ok');
+ await request('legacy','state');await request('legacy','login',{login:'legacy-admin',password:'あいうえ'});
+ await request('legacy','email',{login:'legacy@example.com',password:'あいうえ'});
+ await request('legacy','logout',{});await request('legacy','state');
+ await request('legacy','login',{login:'legacy-admin',password:'あいうえ'},401);
+ await request('legacy','login',{login:'legacy@example.com',password:'あいうえ'});
+ await request('legacy','password',{old_password:'あいうえ',password:'Legacy88'});
  await request('admin','post',{room:'all',kind:'notice',title:'全体Zoom',area:'全地区',event_at:'2099-10-01T18:00',zoom_url:'https://example.com/meeting',body:'公開テスト案内'});
  await request('admin','post',{room:'board',kind:'notice',title:'限定Zoom',area:'理事',event_at:'2099-10-02T18:00',zoom_url:'https://example.com/private',body:'限定内容SECRET'});
  await request('admin','post',{room:'all',kind:'notice',title:'不正リンク',body:'test',zoom_url:'javascript:alert(1)'},400);
@@ -67,17 +99,18 @@ try{
  feed=await request('member','feed',null,200,'&room=all');assert.equal(feed.events.length,0);assert.equal(feed.messages.find(m=>Number(m.id)===allId).body,'');assert.equal(feed.messages.find(m=>Number(m.id)===Number(reply.id)).parent_preview,'非表示の投稿');
  await request('admin','user_update',{id:members.candidate.id,role:'member',active:1});
  await request('candidate','feed',null,401,'&room=board');
- await request('candidate','state');await request('candidate','login',{login:'candidate',password:'New-password-candidate-123'});await request('candidate','feed',null,403,'&room=board');
+ await request('candidate','state');await request('candidate','login',{login:'candidate@example.com',password:'New-password-candidate-123'});await request('candidate','feed',null,403,'&room=board');
  await request('admin','user_update',{id:members.director.id,role:'director',active:0});await request('director','feed',null,401,'&room=board');
  await request('member','logout',{});await request('member','feed',null,401,'&room=all');
- await request('member','state');await request('member','login',{login:'member',password:'New-password-member-123'});
+ await request('member','state');await request('member','login',{login:'member@example.com',password:'New-password-member-123'});
  feed=await request('member','feed',null,200,'&room=all');assert(feed.messages.some(m=>Number(m.id)===Number(reply.id)));
  await request('admin','user_update',{id:admin.user.id,role:'member',active:0},400);
  const reset=await request('admin','user_reset',{id:members.member.id});await request('member','feed',null,401,'&room=all');
- await request('member','state');await request('member','login',{login:'member',password:reset.temporary_password});await request('member','feed',null,403,'&room=all');
+ await request('member','state');await request('member','login',{login:'member@example.com',password:reset.temporary_password});await request('member','feed',null,403,'&room=all');
  const seed=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite'); $s=$db->prepare("INSERT INTO messages(room,user_id,body,created_at) VALUES('all',1,?,?)"); for($i=0;$i<55;$i++)$s->execute(['pagination fixture '.$i,time()]); echo 'ok';`});assert.equal(seed.text,'ok');
  const first=await request('admin','feed',null,200,'&room=all');assert.equal(first.messages.length,50);assert.equal(first.more,true);
  const second=await request('admin','feed',null,200,'&room=all&before='+first.messages.at(-1).id);assert(second.messages.length>0);assert.equal(second.more,false);assert(!second.messages.some(m=>first.messages.some(n=>n.id===m.id)));
  const policy=await php.run({code:fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)),'policy-test.php'),'utf8').replace("dirname(__DIR__) . '/ku-fudo-chat/policy.php'",JSON.stringify(path.join(app,'policy.php')))});assert.equal(policy.exitCode,0);assert(policy.text.includes('PASS'));console.log(policy.text.trim());
  console.log(`PASS: ${passed} API checks plus room isolation, reply scoping, hidden content and persistence assertions.`);
 }finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}
+
