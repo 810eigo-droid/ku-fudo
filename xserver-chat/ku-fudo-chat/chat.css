@@ -50,3 +50,5 @@
 
 .signup-link{display:block;padding:18px 14px;border:2px solid var(--gold);border-radius:10px;text-align:center;font-weight:700;font-size:1.1rem;text-decoration:none}
 #register-form>.primary,#login-form>.primary{width:100%;min-height:52px}
+
+button.danger{color:#9d2b32;border-color:#d6a4a8}button.danger:hover{background:#fff0f0}

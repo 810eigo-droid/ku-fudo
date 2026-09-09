@@ -26,11 +26,15 @@ if ($method === 'GET') {
     }
     if ($action === 'users') {
         requireAdmin($user);
-        output(['users'=>query('SELECT id,login,name,role,active,must_change FROM users ORDER BY id DESC LIMIT 500')->fetchAll()]);
+        output(['users'=>query('SELECT id,login,name,role,active,must_change FROM users WHERE deleted_at=0 ORDER BY id DESC LIMIT 500')->fetchAll()]);
     }
     if ($action === 'applications') {
         requireAdmin($user);
         output(['applications'=>query('SELECT id,login,name,created_at FROM applications ORDER BY id LIMIT 500')->fetchAll()]);
+    }
+    if ($action === 'approval_mails') {
+        requireAdmin($user);
+        output(['mails'=>query('SELECT m.id,m.recipient,m.status,m.attempts,m.last_attempt,u.name FROM approval_mail m JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 100')->fetchAll()]);
     }
     fail('見つかりません。',404);
 }
@@ -152,6 +156,13 @@ if ($action === 'post') {
     if (!$message) { fail('投稿が見つかりません。',404); }
     if ($user['role']!=='admin' && (int)$message['user_id']!==(int)$user['id']) { fail('この投稿を取り下げる権限がありません。',403); }
     query('UPDATE messages SET hidden=1 WHERE id=?',[$id]);audit((int)$user['id'],'hide',$id);
+} elseif ($action === 'approval_mail_retry') {
+    requireAdmin($user);$id=(int)($data['id'] ?? 0);
+    $mail=query('SELECT * FROM approval_mail WHERE id=?',[$id])->fetch();
+    if (!$mail) { fail('送信履歴が見つかりません。',404); }
+    if ($mail['status']==='sent' || ($mail['status']==='sending' && (int)$mail['last_attempt']>time()-600)) { fail('送信済み、または送信処理中です。'); }
+    audit((int)$user['id'],'approval_mail_retry',$id);$db->commit();
+    output(['ok'=>true,'mail_status'=>sendApprovalMail($id)]);
 } elseif ($action === 'application_approve' || $action === 'application_reject') {
     requireAdmin($user);$id=(int)($data['id'] ?? 0);
     $application=query('SELECT * FROM applications WHERE id=?',[$id])->fetch();
@@ -160,9 +171,13 @@ if ($action === 'post') {
         if (query('SELECT 1 FROM users WHERE login=?',[$application['login']])->fetchColumn()) { fail('このメールアドレスは既に会員登録されています。申し込みを削除してください。'); }
         // Public applicants can only become ordinary members. Promotion is a separate admin action.
         query("INSERT INTO users(login,name,password,role,must_change,created_at) VALUES(?,?,?,'member',0,?)",[$application['login'],$application['name'],$application['password'],time()]);
-        audit((int)$user['id'],'application_approve',(int)$db->lastInsertId());
+        $newUserId=(int)$db->lastInsertId();
+        audit((int)$user['id'],'application_approve',$newUserId);
+        query('INSERT INTO approval_mail(user_id,recipient) VALUES(?,?)',[$newUserId,$application['login']]);
+        $mailId=(int)$db->lastInsertId();
     } else { audit((int)$user['id'],'application_reject',$id); }
     query('DELETE FROM applications WHERE id=?',[$id]);
+    if ($action === 'application_approve') { $db->commit();output(['ok'=>true,'mail_status'=>sendApprovalMail($mailId)]); }
 } elseif ($action === 'user_create') {
     requireAdmin($user);$login=loginValue($data);$name=value($data,'name',60,true);$role=value($data,'role',15,true);
     if (!in_array($role,['member','candidate','director','admin'],true)) { fail('権限を確認してください。'); }
@@ -179,10 +194,21 @@ if ($action === 'post') {
     $target=query('SELECT * FROM users WHERE id=?',[$id])->fetch();
     if (!$target) { fail('会員が見つかりません。',404); }
     $result=issueLoginLink($target,(int)$user['id']);$db->commit();output(['ok'=>true]+$result);
+} elseif ($action === 'user_delete') {
+    requireAdmin($user);$id=(int)($data['id'] ?? 0);
+    if ($id===(int)$user['id']) { fail('自分の管理者アカウントは削除できません。'); }
+    $target=query('SELECT * FROM users WHERE id=? AND deleted_at=0',[$id])->fetch();
+    if (!$target) { fail('会員が見つかりません。',404); }
+    // Preserve reply chains but remove account identity, credentials and login capability.
+    query('DELETE FROM login_links WHERE user_id=?',[$id]);
+    query('DELETE FROM approval_mail WHERE user_id=?',[$id]);
+    query('DELETE FROM applications WHERE login=?',[$target['login']]);
+    query("UPDATE users SET login=?,name='退会済みの会員',password=?,role='member',active=0,must_change=0,version=version+1,deleted_at=? WHERE id=?",['deleted-'.$id.'-'.bin2hex(random_bytes(12)).'@invalid.example',password_hash(bin2hex(random_bytes(32)),PASSWORD_DEFAULT),time(),$id]);
+    audit((int)$user['id'],'user_delete',$id);
 } elseif ($action === 'user_update' || $action === 'user_reset') {
     requireAdmin($user);$id=(int)($data['id'] ?? 0);
     if ($id===(int)$user['id']) { fail('自分の権限変更・利用停止・仮パスワード発行はできません。'); }
-    if (!query('SELECT id FROM users WHERE id=?',[$id])->fetchColumn()) { fail('会員が見つかりません。',404); }
+    if (!query('SELECT id FROM users WHERE id=? AND deleted_at=0',[$id])->fetchColumn()) { fail('会員が見つかりません。',404); }
     if ($action === 'user_reset') {
         $temporary=bin2hex(random_bytes(10));query('UPDATE users SET password=?,must_change=1,version=version+1 WHERE id=?',[password_hash($temporary,PASSWORD_DEFAULT),$id]);
         audit((int)$user['id'],'user_reset',$id);$db->commit();output(['ok'=>true,'temporary_password'=>$temporary]);

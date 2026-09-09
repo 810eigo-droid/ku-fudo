@@ -16,6 +16,11 @@ const web=path.join(temp,'public_html');const app=path.join(web,'ku-fudo-chat');
 fs.mkdirSync(web);fs.cpSync(path.join(path.dirname(fileURLToPath(import.meta.url)),'../ku-fudo-chat'),app,{recursive:true});
 const privateDir=path.join(temp,'ku-fudo-private');fs.mkdirSync(privateDir,{mode:0o700});
 const setupKey=randomBytes(24).toString('hex');fs.writeFileSync(path.join(privateDir,'config.php'),`<?php return ['setup_key'=>'${setupKey}'];`,{mode:0o600});
+// Replace only the mail transport in the disposable copy. Never send real test emails.
+const bootstrapPath=path.join(app,'bootstrap.php');
+let testBootstrap=fs.readFileSync(bootstrapPath,'utf8').replace("function_exists('mail')","function_exists('testApprovalTransport')").replace('@mail(', 'testApprovalTransport(');
+testBootstrap+=`\nfunction testApprovalTransport($to,$subject,$body,$headers,$extra): bool { file_put_contents('${privateDir}/mail-test.log',json_encode(compact('to','subject','body','headers','extra'))."\\n",FILE_APPEND);return !is_file('${privateDir}/mail-fail');}\n`;
+fs.writeFileSync(bootstrapPath,testBootstrap);
 await php.mount(temp,createNodeFsMountHandler(temp));
 const jars={};let passed=0;
 async function request(who,action,data,expected=200,query='',csrfOverride){
@@ -113,7 +118,7 @@ try{
  // Personal-link login: preserve v1 data, enforce one use/expiry/roles and persistent session revocation.
  const migration=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DROP TABLE login_links');$db->exec('PRAGMA user_version=1');$db->exec('DELETE FROM limits');echo 'ok';`});assert.equal(migration.text,'ok');
  await request('admin','state');
- const migrated=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode([(int)$db->query('PRAGMA user_version')->fetchColumn(),(int)$db->query('SELECT count(*) FROM messages')->fetchColumn()]);`});const migratedInfo=JSON.parse(migrated.text);assert.equal(migratedInfo[0],3);assert(migratedInfo[1]>55);
+ const migrated=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode([(int)$db->query('PRAGMA user_version')->fetchColumn(),(int)$db->query('SELECT count(*) FROM messages')->fetchColumn()]);`});const migratedInfo=JSON.parse(migrated.text);assert.equal(migratedInfo[0],5);assert(migratedInfo[1]>55);
  await request('anon','user_link',{id:members.member.id},403); // Missing CSRF rejected before authentication.
  await request('anon','state');await request('anon','user_link',{id:members.member.id},401);
  await request('mailOther','user_link',{id:members.member.id},403);
@@ -194,6 +199,63 @@ try{
  await request('limitedApplicant','state');
  for(let i=0;i<10;i++)await request('limitedApplicant','register',{name:'制限テスト',login:'limited@example.com',password:'Limited8'});
  await request('limitedApplicant','register',{name:'制限テスト',login:'limited@example.com',password:'Limited8'},429);
+ // Approval mail queue, contents, failure recovery, authorization and duplicate suppression.
+ let mailHistory=(await request('admin','approval_mails')).mails;
+ assert.equal(mailHistory.length,1);assert.equal(mailHistory[0].status,'sent');assert.equal(mailHistory[0].recipient,'applicant@example.com');
+ let sentMails=fs.readFileSync(path.join(privateDir,'mail-test.log'),'utf8').trim().split('\n').map(JSON.parse);
+ assert.equal(sentMails.length,1);assert.equal(sentMails[0].to,'applicant@example.com');
+ assert.equal(sentMails[0].headers['Reply-To'],'info@taf-design.com');assert.equal(sentMails[0].extra,'-finfo@taf-design.com');
+ const parts=[...sentMails[0].body.matchAll(/Content-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=\r\n]+)/g)].map(m=>Buffer.from(m[1],'base64').toString('utf8'));
+ assert.equal(parts.length,2);assert(parts[0].includes('https://taf-design.com/ku-fudo-chat/'));assert(parts[1].includes('チャットを開く'));assert(!parts.join('').includes('Pass1234'));
+ await request('applicant','approval_mails',null,403);
+ await request('rejected','approval_mails',null,401);
+ await request('applicant','approval_mail_retry',{id:mailHistory[0].id},403);
+ await request('admin','approval_mail_retry',{id:mailHistory[0].id},400);
+ fs.writeFileSync(path.join(privateDir,'mail-fail'),'1');
+ await request('mailFailApplicant','state');await request('mailFailApplicant','register',{name:'送信失敗テスト',login:'mail-fail@example.com',password:'Mailfail8'});
+ const pendingFailure=(await request('admin','applications')).applications.find(a=>a.login==='mail-fail@example.com');
+ const failedApproval=await request('admin','application_approve',{id:pendingFailure.id});assert.equal(failedApproval.mail_status,'failed');
+ await request('mailFailApplicant','login',{login:'mail-fail@example.com',password:'Mailfail8'});
+ await request('mailFailApplicant','feed',null,200,'&room=all'); // Membership survives mail failure.
+ mailHistory=(await request('admin','approval_mails')).mails;const failedMail=mailHistory.find(m=>m.recipient==='mail-fail@example.com');assert.equal(failedMail.status,'failed');assert.equal(Number(failedMail.attempts),1);
+ await request('admin','approval_mail_retry',{id:failedMail.id},403,'','bad-token');
+ fs.unlinkSync(path.join(privateDir,'mail-fail'));
+ const retryResult=await request('admin','approval_mail_retry',{id:failedMail.id});assert.equal(retryResult.mail_status,'sent');
+ await request('admin','approval_mail_retry',{id:failedMail.id},400);
+ mailHistory=(await request('admin','approval_mails')).mails;assert.equal(Number(mailHistory.find(m=>m.id===failedMail.id).attempts),2);
+ sentMails=fs.readFileSync(path.join(privateDir,'mail-test.log'),'utf8').trim().split('\n').map(JSON.parse);assert.equal(sentMails.length,3);
+ // An unconfirmed in-flight send cannot be retried immediately.
+ await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec("UPDATE approval_mail SET status='sending',last_attempt=".time()." WHERE id=${failedMail.id}");`});
+ await request('admin','approval_mail_retry',{id:failedMail.id},400);
+ // A stopped account cannot receive a retry, even if its job is stale.
+ const failedUser=(await request('admin','users')).users.find(u=>u.login==='mail-fail@example.com');
+ await request('admin','user_update',{id:failedUser.id,role:'member',active:0});
+ await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec("UPDATE approval_mail SET last_attempt=1 WHERE id=${failedMail.id}");`});
+ const suppressed=await request('admin','approval_mail_retry',{id:failedMail.id});assert.equal(suppressed.mail_status,'failed');
+ assert.equal(fs.readFileSync(path.join(privateDir,'mail-test.log'),'utf8').trim().split('\n').length,3);
+ // Member deletion removes identity/access but preserves conversations and replies.
+ await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DELETE FROM limits');`});
+ const deletionInvite=await request('admin','user_link',{id:newMember.id});
+ await request('applicant','post',{room:'all',body:'Deletion preserves this conversation'});
+ const deleteFeed=await request('admin','feed',null,200,'&room=all');const keptPost=deleteFeed.messages.find(m=>m.body==='Deletion preserves this conversation');
+ await request('admin','post',{room:'all',body:'Reply preserved',parent_id:keptPost.id});
+ await request('applicant','user_delete',{id:newMember.id},403);
+ await request('admin','user_delete',{id:admin.user.id},400);
+ await request('admin','user_delete',{id:newMember.id},403,'','bad-token');
+ await request('admin','user_delete',{id:newMember.id});
+ await request('applicant','feed',null,401,'&room=all');await request('applicant2','feed',null,401,'&room=all');
+ await request('applicant','state');await request('applicant','login',{login:'applicant@example.com',password:'Pass1234'},401);
+ await request('applicant','link_login',{token:deletionInvite.login_token,remember:true},403);
+ assert(!(await request('admin','users')).users.some(u=>u.id===newMember.id));
+ assert(!(await request('admin','approval_mails')).mails.some(m=>m.recipient==='applicant@example.com'));
+ await request('admin','user_delete',{id:newMember.id},404);
+ await request('admin','user_update',{id:newMember.id,role:'admin',active:1},404);
+ await request('admin','user_reset',{id:newMember.id},404);
+ await request('admin','user_link',{id:newMember.id},400);
+ const retainedDelete=(await request('admin','feed',null,200,'&room=all')).messages;
+ assert.equal(retainedDelete.find(m=>m.id===keptPost.id).name,'退会済みの会員');assert(retainedDelete.some(m=>m.body==='Reply preserved'&&Number(m.parent_id)===Number(keptPost.id)));
+ await request('applicant','register',{name:'再申込',login:'applicant@example.com',password:'Another8'});
+ assert((await request('admin','applications')).applications.some(a=>a.login==='applicant@example.com'));assert.equal((await request('applicant','state')).user,null);
  const policy=await php.run({code:fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)),'policy-test.php'),'utf8').replace("dirname(__DIR__) . '/ku-fudo-chat/policy.php'",JSON.stringify(path.join(app,'policy.php')))});assert.equal(policy.exitCode,0);assert(policy.text.includes('PASS'));console.log(policy.text.trim());
  console.log(`PASS: ${passed} API checks plus room isolation, reply scoping, hidden content and persistence assertions.`);
 }finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}

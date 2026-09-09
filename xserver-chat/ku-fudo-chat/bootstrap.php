@@ -74,7 +74,20 @@ if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 2) {
     $db->exec('PRAGMA user_version=3');
     $db->commit();
 }
-if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 3) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 3) {
+    $db->beginTransaction();
+    $db->exec("CREATE TABLE IF NOT EXISTS approval_mail (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id), recipient TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, last_attempt INTEGER NOT NULL DEFAULT 0)");
+    $db->exec('PRAGMA user_version=4');
+    $db->commit();
+}
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 4) {
+    $db->beginTransaction();
+    $columns=$db->query('PRAGMA table_info(users)')->fetchAll(PDO::FETCH_COLUMN,1);
+    if (!in_array('deleted_at',$columns,true)) { $db->exec('ALTER TABLE users ADD COLUMN deleted_at INTEGER NOT NULL DEFAULT 0'); }
+    $db->exec('PRAGMA user_version=5');
+    $db->commit();
+}
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 5) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
 
 function query(string $sql, array $values = []): PDOStatement {
     global $db;
@@ -137,4 +150,40 @@ function issueLoginLink(array $user, int $actor): array {
 }
 function audit(int $actor, string $action, int $target): void {
     query('INSERT INTO audit(actor,action,target,created_at) VALUES(?,?,?,?)', [$actor,$action,$target,time()]);
+}
+
+// Called only after approval is committed, or by an authenticated admin retry.
+// 'sent' means accepted by the server's mail transport, not verified inbox delivery.
+function sendApprovalMail(int $id): string {
+    global $db,$config;
+    $db->beginTransaction();
+    $claimed=query("UPDATE approval_mail SET status='sending',attempts=attempts+1,last_attempt=? WHERE id=? AND (status IN ('pending','failed') OR (status='sending' AND last_attempt<?))",[time(),$id,time()-600])->rowCount();
+    $entry=query('SELECT m.*,u.name,u.login,u.active FROM approval_mail m JOIN users u ON u.id=m.user_id WHERE m.id=?',[$id])->fetch();
+    $db->commit();
+    if (!$entry) { return 'missing'; }
+    if (!$claimed) { return $entry['status']; }
+    $ok=false;
+    try {
+        $from=$config['approval_mail_from'] ?? 'info@taf-design.com';
+        $url=$config['chat_login_url'] ?? 'https://taf-design.com/ku-fudo-chat/';
+        $enabled=($config['approval_mail_enabled'] ?? true)===true;
+        $validFrom=is_string($from) && preg_match('/\A[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\z/D',$from) && filter_var($from,FILTER_VALIDATE_EMAIL);
+        $validUrl=is_string($url) && filter_var($url,FILTER_VALIDATE_URL) && parse_url($url,PHP_URL_SCHEME)==='https' && parse_url($url,PHP_URL_USER)===null && parse_url($url,PHP_URL_PASS)===null;
+        $recipient=$entry['recipient'];
+        if ($enabled && $validFrom && $validUrl && function_exists('mail') && (int)$entry['active'] && $entry['login']===$recipient && filter_var($recipient,FILTER_VALIDATE_EMAIL) && !preg_match('/[\r\n]/',$recipient)) {
+            $subject=mb_encode_mimeheader('【献文舎】会員登録が承認されました','UTF-8','B',"\r\n");
+            $sender='=?UTF-8?B?'.base64_encode('献文舎 会員サイト').'?=';
+            $text=$entry['name']." 様\n\n会員登録が承認されました。\n以下のリンクを開いて、チャットにログインしてください。\n\n".$url."\n\n登録時のメールアドレスとパスワードをご入力ください。\n皆さんの投稿やZoom会議の予定をご覧いただけます。\n\n献文舎 会員サイト\nお問い合わせ：".$from;
+            $escape=fn(string $value): string => htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
+            $html='<!doctype html><html lang="ja"><meta charset="utf-8"><body style="font-family:sans-serif;color:#203448;line-height:1.8;font-size:18px"><p>'.$escape($entry['name']).' 様</p><h1 style="font-size:24px">会員登録が承認されました</h1><p>こちらからチャットにログインできます。</p><p><a href="'.$escape($url).'" style="display:inline-block;background:#142c40;color:white;padding:16px 28px;border-radius:8px;text-decoration:none;font-weight:bold">チャットを開く →</a></p><p>登録時のメールアドレスとパスワードをご入力ください。</p><p>皆さんの投稿やZoom会議の予定をご覧いただけます。</p><p style="font-size:14px">ボタンが開けない場合：<br><a href="'.$escape($url).'">'.$escape($url).'</a></p><p>献文舎 会員サイト<br>お問い合わせ：'.$escape($from).'</p></body></html>';
+            $boundary='ku_fudo_'.bin2hex(random_bytes(16));
+            $part=fn(string $type,string $body): string => '--'.$boundary."\r\nContent-Type: ".$type."; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n".chunk_split(base64_encode($body),76,"\r\n");
+            $body=$part('text/plain',$text).$part('text/html',$html).'--'.$boundary."--\r\n";
+            $headers=['From'=>$sender.' <'.$from.'>','Reply-To'=>$from,'MIME-Version'=>'1.0','Content-Type'=>'multipart/alternative; boundary="'.$boundary.'"'];
+            $ok=@mail($recipient,$subject,$body,$headers,'-f'.$from);
+        }
+    } catch (Throwable $error) { error_log('Ku-fudo approval mail: transport failure'); }
+    $status=$ok?'sent':'failed';
+    query('UPDATE approval_mail SET status=? WHERE id=?',[$status,$id]);
+    return $status;
 }
