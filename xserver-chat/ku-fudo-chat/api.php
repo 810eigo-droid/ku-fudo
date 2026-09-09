@@ -24,6 +24,11 @@ if ($method === 'GET') {
         $events = query("SELECT id,title,area,event_at,zoom_url,substr(body,1,160) AS description FROM messages WHERE room=? AND kind='notice' AND hidden=0 AND event_at>=? ORDER BY event_at LIMIT 20", [$room,date('Y-m-d\TH:i')])->fetchAll();
         output(['messages' => $messages, 'more' => $more, 'events' => $events, 'user' => publicUser($user)]);
     }
+    if ($action === 'submissions') {
+        $admin=$user['role']==='admin';
+        $where=$admin ? "s.status='pending'" : "s.user_id=? AND s.status IN ('pending','rejected')";
+        output(['submissions'=>query("SELECT s.id,s.body,s.parent_id,s.status,s.created_at,u.name,u.active,u.deleted_at,CASE WHEN p.hidden=0 THEN substr(p.body,1,120) ELSE '取り下げ済みの投稿' END AS parent_preview FROM submissions s JOIN users u ON u.id=s.user_id LEFT JOIN messages p ON p.id=s.parent_id WHERE $where ORDER BY s.id DESC LIMIT 100",$admin?[]:[$user['id']])->fetchAll()]);
+    }
     if ($action === 'users') {
         requireAdmin($user);
         output(['users'=>query('SELECT id,login,name,role,membership,active,must_change FROM users WHERE deleted_at=0 ORDER BY id DESC LIMIT 500')->fetchAll()]);
@@ -158,7 +163,23 @@ if ($action === 'post') {
     }
     $parent=(int)($data['parent_id'] ?? 0);
     if ($parent && !query('SELECT id FROM messages WHERE id=? AND room=? AND hidden=0',[$parent,$room])->fetchColumn()) { fail('返信先が見つかりません。',404); }
+    if ($room==='all' && $user['membership']==='free' && $user['role']!=='admin') {
+        if ((int)query("SELECT count(*) FROM submissions WHERE user_id=? AND status='pending'",[$user['id']])->fetchColumn()>=20) { fail('承認待ちの投稿が20件あります。管理者の確認をお待ちください。',429); }
+        query('INSERT INTO submissions(user_id,body,parent_id,created_at) VALUES(?,?,?,?)',[$user['id'],$body,$parent?:null,time()]);
+        $db->commit();output(['ok'=>true,'pending'=>true]);
+    }
     query('INSERT INTO messages(room,user_id,body,kind,title,area,event_at,zoom_url,parent_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)',[$room,$user['id'],$body,$kind,$title,$area,$at,$url,$parent?:null,time()]);
+} elseif ($action === 'submission_review') {
+    requireAdmin($user);$id=(int)($data['id'] ?? 0);$decision=value($data,'decision',10,true);
+    if (!in_array($decision,['approved','rejected'],true)) { fail('承認方法を確認してください。'); }
+    $submission=query("SELECT s.*,u.active,u.deleted_at FROM submissions s JOIN users u ON u.id=s.user_id WHERE s.id=? AND s.status='pending'",[$id])->fetch();
+    if (!$submission) { fail('この投稿は処理済みです。',409); }
+    if ($decision==='approved') {
+        if (!(int)$submission['active'] || (int)$submission['deleted_at']) { fail('停止・退会した会員の投稿は公開できません。'); }
+        query("INSERT INTO messages(room,user_id,body,kind,parent_id,created_at) VALUES('all',?,?,'chat',?,?)",[$submission['user_id'],$submission['body'],$submission['parent_id'],time()]);
+    }
+    query('UPDATE submissions SET status=?,reviewed_at=?,reviewer_id=? WHERE id=?',[$decision,time(),$user['id'],$id]);
+    audit((int)$user['id'],'submission_'.$decision,$id);
 } elseif ($action === 'hide') {
     $room=value($data,'room',10,true); roomCheck($user,$room);$id=(int)($data['id'] ?? 0);
     $message=query('SELECT * FROM messages WHERE id=? AND room=?',[$id,$room])->fetch();

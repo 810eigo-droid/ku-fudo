@@ -118,7 +118,7 @@ try{
  // Personal-link login: preserve v1 data, enforce one use/expiry/roles and persistent session revocation.
  const migration=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DROP TABLE login_links');$db->exec('PRAGMA user_version=1');$db->exec('DELETE FROM limits');echo 'ok';`});assert.equal(migration.text,'ok');
  await request('admin','state');
- const migrated=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode([(int)$db->query('PRAGMA user_version')->fetchColumn(),(int)$db->query('SELECT count(*) FROM messages')->fetchColumn()]);`});const migratedInfo=JSON.parse(migrated.text);assert.equal(migratedInfo[0],6);assert(migratedInfo[1]>55);
+ const migrated=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode([(int)$db->query('PRAGMA user_version')->fetchColumn(),(int)$db->query('SELECT count(*) FROM messages')->fetchColumn()]);`});const migratedInfo=JSON.parse(migrated.text);assert.equal(migratedInfo[0],7);assert(migratedInfo[1]>55);
  await request('anon','user_link',{id:members.member.id},403); // Missing CSRF rejected before authentication.
  await request('anon','state');await request('anon','user_link',{id:members.member.id},401);
  await request('mailOther','user_link',{id:members.member.id},403);
@@ -237,6 +237,7 @@ try{
  await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DELETE FROM limits');`});
  const deletionInvite=await request('admin','user_link',{id:newMember.id});
  await request('applicant','post',{room:'all',body:'Deletion preserves this conversation'});
+ const deletionPending=(await request('admin','submissions')).submissions.find(m=>m.body==='Deletion preserves this conversation');await request('admin','submission_review',{id:deletionPending.id,decision:'approved'});
  const deleteFeed=await request('admin','feed',null,200,'&room=all');const keptPost=deleteFeed.messages.find(m=>m.body==='Deletion preserves this conversation');
  await request('admin','post',{room:'all',body:'Reply preserved',parent_id:keptPost.id});
  await request('applicant','user_delete',{id:newMember.id},403);
@@ -264,7 +265,27 @@ try{
  await request('admin','application_approve',{id:freeApp.id});
  await request('freeReader','login',{login:'free-reader@example.com',password:'Free8888'});
  const freeReader=(await request('freeReader','state')).user;assert.equal(freeReader.membership,'free');
- await request('freeReader','post',{room:'all',body:'無料会員も投稿できます'});
+ const submitted=await request('freeReader','post',{room:'all',body:'無料会員の承認前本文',status:'approved',membership:'regular'});assert.equal(submitted.pending,true);
+ const queue=(await request('admin','submissions')).submissions;const pending=queue.find(m=>m.body==='無料会員の承認前本文');assert(pending);
+ assert(!(await request('mailOther','feed',null,200,'&room=all')).messages.some(m=>m.body==='無料会員の承認前本文'));
+ assert(!(await request('mailOther','submissions')).submissions.some(m=>m.id===pending.id));
+ assert((await request('freeReader','submissions')).submissions.some(m=>m.id===pending.id));
+ await request('rejected','submissions',null,401);
+ await request('freeReader','submission_review',{id:pending.id,decision:'approved'},403);
+ await request('admin','submission_review',{id:pending.id,decision:'approved'},403,'','bad-token');
+ await request('admin','submission_review',{id:pending.id,decision:'approved'});
+ await request('admin','submission_review',{id:pending.id,decision:'approved'},409);
+ const approved=(await request('mailOther','feed',null,200,'&room=all')).messages.find(m=>m.body==='無料会員の承認前本文');assert(approved);assert.equal(Number(approved.user_id),Number(freeReader.id));
+ await request('freeReader','post',{room:'all',body:'未承認の返信',parent_id:approved.id});
+ const replyPending=(await request('admin','submissions')).submissions.find(m=>m.body==='未承認の返信');assert.equal(Number(replyPending.parent_id),Number(approved.id));
+ assert(!(await request('mailOther','feed',null,200,'&room=all')).messages.some(m=>m.body==='未承認の返信'));
+ await request('admin','submission_review',{id:replyPending.id,decision:'rejected'});
+ assert.equal((await request('freeReader','submissions')).submissions.find(m=>m.id===replyPending.id).status,'rejected');
+ await request('admin','submission_review',{id:replyPending.id,decision:'approved'},409);
+ await request('mailOther','post',{room:'all',body:'通常会員は即時公開'});
+ assert((await request('freeReader','feed',null,200,'&room=all')).messages.some(m=>m.body==='通常会員は即時公開'));
+ await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DELETE FROM limits');`});
+
  await request('admin','post',{room:'all',kind:'notice',title:'有料Zoomの案内',body:'参加費は案内文でお知らせ',event_at:'2099-11-01T12:00',zoom_url:'https://example.com/paid-zoom'});
  assert((await request('freeReader','feed',null,200,'&room=all')).events.some(e=>e.title==='有料Zoomの案内'));
  await request('freeReader','feed',null,403,'&room=board');

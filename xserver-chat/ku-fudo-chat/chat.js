@@ -13,7 +13,7 @@ let returnPosition=history.state?.chatPosition;
 if(new URLSearchParams(location.hash.slice(1)).has('invite'))history.replaceState(null,'',location.pathname+location.search);
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
 function node(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
-function clearPrivate(){requestGeneration++;user=null;['chat-panel','account','admin-panel','navigation','next-zoom','materials-panel','material-editor-section','material-admin-actions'].forEach(id=>$(id).hidden=true);['messages','events','users','identity','next-zoom-date','next-zoom-title','applications','approval-mails','materials-list','material-title','material-body','materials-membership'].forEach(id=>$(id).replaceChildren());$('material-resource').removeAttribute('href');$('material-resource').hidden=true;$('material-form').reset();currentMaterial=null;$('email-form').reset();$('password-form').reset();postForm.reset();clearReply();$('credential').textContent='';$('credential-user').textContent='';credentialText='';if($('credential-dialog').open)$('credential-dialog').close();}
+function clearPrivate(){requestGeneration++;user=null;['chat-panel','account','admin-panel','navigation','next-zoom','materials-panel','material-editor-section','material-admin-actions'].forEach(id=>$(id).hidden=true);['messages','events','users','identity','next-zoom-date','next-zoom-title','applications','submissions','own-submissions','approval-mails','materials-list','material-title','material-body','materials-membership'].forEach(id=>$(id).replaceChildren());$('material-resource').removeAttribute('href');$('material-resource').hidden=true;$('material-form').reset();currentMaterial=null;$('email-form').reset();$('password-form').reset();postForm.reset();clearReply();$('credential').textContent='';$('credential-user').textContent='';credentialText='';if($('credential-dialog').open)$('credential-dialog').close();}
 async function api(action,data,query=''){
  const res=await fetch('api.php?action='+encodeURIComponent(action)+query,{method:data?'POST':'GET',credentials:'same-origin',cache:'no-store',headers:data?{'Content-Type':'application/json','X-CSRF-Token':csrf}:{},body:data?JSON.stringify(data):undefined});
  let json;try{json=await res.json();}catch{throw new Error('サーバーの応答を読み取れません。PHPと設置場所を確認してください。');}
@@ -31,9 +31,9 @@ async function start(){
  $('chat-panel').hidden=required;$('navigation').hidden=required;$('admin-panel').hidden=required||user.role!=='admin';
  $('board-button').hidden=user.role==='member';$('kind-label').hidden=user.role!=='admin';
  if(required){status('初回パスワードを変更してください。');return;}
- room=new URLSearchParams(location.search).get('room')==='board'&&user.role!=='member'?'board':'all';setRoomLabels();$('materials-panel').hidden=true;if(new URLSearchParams(location.search).get('view')==='materials'){$('chat-panel').hidden=true;$('materials-panel').hidden=false;document.querySelectorAll('[data-room]').forEach(a=>a.removeAttribute('aria-current'));$('materials-nav').setAttribute('aria-current','page');await loadMaterials();}else{await feed();}if(user.role==='admin')await loadUsers();await restoreChatPosition();
+ room=new URLSearchParams(location.search).get('room')==='board'&&user.role!=='member'?'board':'all';setRoomLabels();$('materials-panel').hidden=true;if(new URLSearchParams(location.search).get('view')==='materials'){$('chat-panel').hidden=true;$('materials-panel').hidden=false;document.querySelectorAll('[data-room]').forEach(a=>a.removeAttribute('aria-current'));$('materials-nav').setAttribute('aria-current','page');await loadMaterials();}else{await feed();}await loadSubmissions();if(user.role==='admin')await loadUsers();await restoreChatPosition();
 }
-function setRoomLabels(){$('materials-nav').removeAttribute('aria-current');$('zoom-nav').href='?room='+room+'#zoom-schedule';const title=room==='all'?'全体チャット':'理事＆理事候補チャット';$('room-title').textContent=title;$('post-room').textContent='送信先：'+title;$('room-description').textContent=room==='all'?'一般会員・理事候補・理事が参加する、お知らせと交流の場です。':'理事・理事候補・管理者だけが閲覧・投稿できます。';document.querySelectorAll('[data-room]').forEach(b=>{if(b.dataset.room===room)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});}
+function setRoomLabels(){$('materials-nav').removeAttribute('aria-current');$('zoom-nav').href='?room='+room+'#zoom-schedule';const title=room==='all'?'全体チャット':'理事＆理事候補チャット';$('room-title').textContent=title;$('post-room').textContent='送信先：'+title;$('moderation-note').hidden=!(room==='all'&&user.membership==='free'&&user.role!=='admin');$('room-description').textContent=room==='all'?'一般会員・理事候補・理事が参加する、お知らせと交流の場です。':'理事・理事候補・管理者だけが閲覧・投稿できます。';document.querySelectorAll('[data-room]').forEach(b=>{if(b.dataset.room===room)b.setAttribute('aria-current','page');else b.removeAttribute('aria-current');});}
 function zoomLink(url){const a=node('a','Zoomに参加','zoom-link');a.href=url;a.rel='noopener noreferrer';return a;}
 function localDate(value){return value.replace('T',' ');}
 function meetingDate(value){const date=new Date(value+':00+09:00');if(Number.isNaN(date.getTime()))return value.replace('T',' ');return new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'long',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(date);}
@@ -62,7 +62,7 @@ async function feed(older=false){
  try{const result=await api('feed',null,'&room='+selectedRoom+(older?'&before='+oldest:''));if(generation!==requestGeneration||selectedRoom!==room)return;
  user=result.user;viewingHistory=older;visiblePages=older?visiblePages+1:1;if(!older)$('messages').replaceChildren();for(const m of result.messages)$('messages').append(messageCard(m));
  if(!$('messages').children.length)$('messages').append(node('p','まだ投稿はありません。最初のメッセージを投稿しましょう。','empty'));
- if(result.messages.length)oldest=Number(result.messages[result.messages.length-1].id);$('older').hidden=!result.more;showEvents(result.events);status('');
+ if(result.messages.length)oldest=Number(result.messages[result.messages.length-1].id);$('older').hidden=!result.more;showEvents(result.events);status('');if(!older&&!$('submissions').contains(document.activeElement))await loadSubmissions();
  }finally{loadingFeed=false;}
 }
 function clearReply(){$('reply-to').hidden=true;$('reply-label').textContent='';postForm.elements.parent_id.value='0';}
@@ -91,7 +91,7 @@ async function loadApplications(){await loadApprovalMails();const result=await a
 bindForm('setup-form',async form=>{await api('setup',formData(form));form.reset();await start();status('初期設定が完了しました。config.phpの初期設定キーを空に戻してください。');});
 bindForm('password-form',async form=>{await api('password',formData(form));form.reset();await start();status('パスワードを変更しました。');});
 bindForm('email-form',async form=>{const data=formData(form);if(!confirm('ログイン用メールアドレスを '+data.login.trim()+' に変更します。よろしいですか？'))return;await api('email',data);form.reset();await start();status('ログイン用メールアドレスを変更しました。次回から新しいメールアドレスでログインしてください。');});
-bindForm('post-form',async form=>{posting=true;const selected=room;try{await api('post',{...formData(form),room:selected});form.reset();clearReply();noticeFields();await feed();status('投稿しました。');}finally{posting=false;}});
+bindForm('post-form',async form=>{posting=true;const selected=room;try{const result=await api('post',{...formData(form),room:selected});form.reset();clearReply();noticeFields();await feed();await loadSubmissions();status(result.pending?'送信しました。管理者の承認後に表示されます。':'投稿しました。');}finally{posting=false;}});
 function openCredentialDialog(){saveChatPosition();history.pushState({...history.state,credentialView:true},'', '#credentials');$('credential-dialog').showModal();}
 window.addEventListener('popstate',()=>{if($('credential-dialog').open&&!history.state?.credentialView)$('credential-dialog').close();});
 function showCredential(label,password){$('credential-heading').textContent='仮パスワードを発行しました';$('credential-description').textContent='この画面を閉じると再表示できません。本人に個別に伝えてください。';$('credential-user').textContent=label;$('credential').textContent=password;$('credential-note').textContent='初回ログイン時に8文字以上のパスワードへ変更が必要です。';credentialText=label+'\n仮パスワード：'+password+'\nログイン先：'+new URL('./',location.href).href+'\n初回ログイン時に8文字以上のパスワードへ変更してください。';openCredentialDialog();}
@@ -117,3 +117,17 @@ const topButton=$('top');window.addEventListener('scroll',()=>{topButton.hidden=
 if('ResizeObserver'in window)new ResizeObserver(()=>document.documentElement.style.setProperty('--menu-height',($('navigation').getBoundingClientRect().height+14)+'px')).observe($('navigation'));
 start().catch(e=>status(e.message,true));
 
+
+$('submissions-refresh').onclick=()=>loadSubmissions().catch(e=>status(e.message,true));
+async function loadSubmissions(){
+ const identity=user;const result=await api('submissions');if(user!==identity)return;
+ const admin=user.role==='admin';const box=$(admin?'submissions':'own-submissions');box.replaceChildren();
+ if(!result.submissions.length){if(admin)box.append(node('p','承認待ちの投稿はありません。'));return;}
+ for(const m of result.submissions){
+  const card=node('article',undefined,'message');card.append(node('b',admin?m.name+' さんの投稿':m.status==='pending'?'承認待ち':'今回は掲載されませんでした'));
+  if(m.parent_id)card.append(node('blockquote','返信先：'+(m.parent_preview||'投稿')));
+  card.append(node('p',m.body,'message-body'));
+  if(admin){const actions=node('div',undefined,'message-actions');for(const [decision,label] of [['approved','承認して公開'],['rejected','掲載しない']]){const button=node('button',label,decision==='approved'?'primary':'secondary');button.type='button';button.disabled=decision==='approved'&&(!Number(m.active)||Number(m.deleted_at));button.onclick=async()=>{if(!confirm(m.name+' さんの投稿を'+(decision==='approved'?'全体チャットに公開':'非掲載に')+'しますか？'))return;button.disabled=true;try{await api('submission_review',{id:Number(m.id),decision});await loadSubmissions();await feed();status(decision==='approved'?'投稿を公開しました。':'非掲載にしました。');}catch(e){status(e.message,true);}finally{button.disabled=decision==='approved'&&(!Number(m.active)||Number(m.deleted_at));}};actions.append(button);}card.append(actions);}
+  box.append(card);
+ }
+}

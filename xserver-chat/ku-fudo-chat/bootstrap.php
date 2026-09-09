@@ -95,7 +95,14 @@ if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 5) {
     $db->exec('PRAGMA user_version=6');
     $db->commit();
 }
-if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 6) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 6) {
+    $db->beginTransaction();
+    $db->exec("CREATE TABLE IF NOT EXISTS submissions (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), body TEXT NOT NULL, parent_id INTEGER REFERENCES messages(id), status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')), created_at INTEGER NOT NULL, reviewed_at INTEGER NOT NULL DEFAULT 0, reviewer_id INTEGER REFERENCES users(id))");
+    $db->exec('CREATE INDEX IF NOT EXISTS submissions_status ON submissions(status,id)');
+    $db->exec('PRAGMA user_version=7');
+    $db->commit();
+}
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 7) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
 
 function query(string $sql, array $values = []): PDOStatement {
     global $db;
@@ -189,9 +196,9 @@ function sendApprovalMail(int $id): string {
         if ($enabled && $validFrom && $validUrl && function_exists('mail') && (int)$entry['active'] && $entry['login']===$recipient && filter_var($recipient,FILTER_VALIDATE_EMAIL) && !preg_match('/[\r\n]/',$recipient)) {
             $subject=mb_encode_mimeheader('【献文舎】会員登録が承認されました','UTF-8','B',"\r\n");
             $sender='=?UTF-8?B?'.base64_encode('献文舎 会員サイト').'?=';
-            $text=$entry['name']." 様\n\n会員登録が承認されました。\n以下のリンクを開いて、チャットにログインしてください。\n\n".$url."\n\n登録時のメールアドレスとパスワードをご入力ください。\n皆さんの投稿やZoom会議の予定をご覧いただけます。\n\n献文舎 会員サイト\nお問い合わせ：".$from;
+            $text=$entry['name']." 様\n\n会員登録が承認されました。\n以下のリンクを開いて、チャットにログインしてください。\n\n".$url."\n\n登録時のメールアドレスとパスワードをご入力ください。\n皆さんの投稿やZoom会議の予定をご覧いただけます。\n教材を見るときは、ログイン後に「教材を見る」ボタン、または上部メニューの「教材」を押してください。\n\n献文舎 会員サイト\nお問い合わせ：".$from;
             $escape=fn(string $value): string => htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
-            $html='<!doctype html><html lang="ja"><meta charset="utf-8"><body style="font-family:sans-serif;color:#203448;line-height:1.8;font-size:18px"><p>'.$escape($entry['name']).' 様</p><h1 style="font-size:24px">会員登録が承認されました</h1><p>こちらからチャットにログインできます。</p><p><a href="'.$escape($url).'" style="display:inline-block;background:#142c40;color:white;padding:16px 28px;border-radius:8px;text-decoration:none;font-weight:bold">チャットを開く →</a></p><p>登録時のメールアドレスとパスワードをご入力ください。</p><p>皆さんの投稿やZoom会議の予定をご覧いただけます。</p><p style="font-size:14px">ボタンが開けない場合：<br><a href="'.$escape($url).'">'.$escape($url).'</a></p><p>献文舎 会員サイト<br>お問い合わせ：'.$escape($from).'</p></body></html>';
+            $html='<!doctype html><html lang="ja"><meta charset="utf-8"><body style="font-family:sans-serif;color:#203448;line-height:1.8;font-size:18px"><p>'.$escape($entry['name']).' 様</p><h1 style="font-size:24px">会員登録が承認されました</h1><p>こちらからチャットにログインできます。</p><p><a href="'.$escape($url).'" style="display:inline-block;background:#142c40;color:white;padding:16px 28px;border-radius:8px;text-decoration:none;font-weight:bold">チャットを開く →</a></p><p>登録時のメールアドレスとパスワードをご入力ください。</p><p>皆さんの投稿やZoom会議の予定をご覧いただけます。</p><p>教材を見るときは、ログイン後に<strong>「教材を見る」ボタン</strong>、または上部メニューの<strong>「教材」</strong>を押してください。</p><p style="font-size:14px">ボタンが開けない場合：<br><a href="'.$escape($url).'">'.$escape($url).'</a></p><p>献文舎 会員サイト<br>お問い合わせ：'.$escape($from).'</p></body></html>';
             $boundary='ku_fudo_'.bin2hex(random_bytes(16));
             $part=fn(string $type,string $body): string => '--'.$boundary."\r\nContent-Type: ".$type."; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n".chunk_split(base64_encode($body),76,"\r\n");
             $body=$part('text/plain',$text).$part('text/html',$html).'--'.$boundary."--\r\n";

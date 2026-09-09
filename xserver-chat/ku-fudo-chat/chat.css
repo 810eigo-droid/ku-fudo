@@ -54,3 +54,5 @@
 button.danger{color:#9d2b32;border-color:#d6a4a8}button.danger:hover{background:#fff0f0}
 
 .material-card{display:block;margin:14px 0;padding:20px;background:white;border:1px solid var(--line);border-radius:8px;text-decoration:none}.material-card strong{display:block;font-size:20px}.material-card span{display:block;margin-top:8px;color:var(--muted);font-size:14px}.material-card:hover{border-color:#997b41}#material-title{font-size:24px;margin-top:22px}#material-resource{display:inline-block;text-decoration:none;margin-top:16px}#material-admin-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
+
+.learning-shortcut{display:flex;align-items:center;gap:16px;margin:12px 0 18px;padding:12px 16px;background:white;border:1px solid var(--line);border-left:3px solid #b7985a;border-radius:8px}.learning-shortcut a{flex-shrink:0;font-size:16px;text-decoration:none;min-height:48px;padding:10px 14px}.learning-shortcut p{margin:0;font-size:16px;line-height:1.6}@media(max-width:360px){.learning-shortcut{gap:10px;padding:10px}.learning-shortcut a{padding:10px}.learning-shortcut p{font-size:15px}}
