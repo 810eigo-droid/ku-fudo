@@ -113,7 +113,7 @@ try{
  // Personal-link login: preserve v1 data, enforce one use/expiry/roles and persistent session revocation.
  const migration=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DROP TABLE login_links');$db->exec('PRAGMA user_version=1');$db->exec('DELETE FROM limits');echo 'ok';`});assert.equal(migration.text,'ok');
  await request('admin','state');
- const migrated=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode([(int)$db->query('PRAGMA user_version')->fetchColumn(),(int)$db->query('SELECT count(*) FROM messages')->fetchColumn()]);`});const migratedInfo=JSON.parse(migrated.text);assert.equal(migratedInfo[0],2);assert(migratedInfo[1]>55);
+ const migrated=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode([(int)$db->query('PRAGMA user_version')->fetchColumn(),(int)$db->query('SELECT count(*) FROM messages')->fetchColumn()]);`});const migratedInfo=JSON.parse(migrated.text);assert.equal(migratedInfo[0],3);assert(migratedInfo[1]>55);
  await request('anon','user_link',{id:members.member.id},403); // Missing CSRF rejected before authentication.
  await request('anon','state');await request('anon','user_link',{id:members.member.id},401);
  await request('mailOther','user_link',{id:members.member.id},403);
@@ -153,6 +153,47 @@ try{
  const beforeStop=await request('admin','user_link',{id:boardLinkUser.id});await request('admin','user_update',{id:boardLinkUser.id,role:'member',active:0});await request('boardLink','feed',null,401,'&room=all');await request('replay','link_login',{token:beforeStop.login_token,remember:true},403);await request('admin','user_link',{id:boardLinkUser.id},400);
  const beforeReset=await request('admin','user_link',{id:senior.id});await request('admin','user_reset',{id:senior.id});await request('replay','link_login',{token:beforeReset.login_token,remember:true},403);
  const afterReset=await request('admin','user_link',{id:senior.id});await request('senior','state');await request('senior','link_login',{token:afterReset.login_token,remember:true});await request('senior','logout',{});assert.equal((await request('senior','state')).user,null);await request('senior','feed',null,401,'&room=all');
+ // Public applications: no access until approval, no role selection, no password replacement.
+ await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DELETE FROM limits');`});
+ await request('applicant','state');
+ const application={name:'申込テスト',login:' Applicant@Example.com ',password:'Pass1234',role:'admin',active:1};
+ await request('applicant','register',application,403,'','wrong-csrf');
+ await request('applicant','register',{...application,password:'1234567'},400);
+ await request('applicant','register',{...application,login:'invalid'},400);
+ await request('applicant','register',application);
+ assert.equal((await request('applicant','state')).user,null);
+ await request('applicant','login',{login:'applicant@example.com',password:'Pass1234'},403);
+ await request('applicant','feed',null,401,'&room=all');
+ await request('applicant','applications',null,401);
+ await request('mailOther','applications',null,403);
+ await request('applicant','register',{...application,password:'Changed88'});
+ let applications=(await request('admin','applications')).applications;
+ assert.equal(applications.length,1);assert.equal(applications[0].login,'applicant@example.com');assert(!('password' in applications[0]));
+ const applicationId=applications[0].id;
+ const hashed=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo $db->query('SELECT password FROM applications')->fetchColumn();`});assert(!hashed.text.includes('Pass1234'));assert.match(hashed.text,/^\$2y\$/);
+ await request('mailOther','application_approve',{id:applicationId},403);
+ await request('admin','application_approve',{id:applicationId},403,'','wrong-csrf');
+ await request('admin','application_approve',{id:applicationId,role:'admin'});
+ await request('admin','application_approve',{id:applicationId},404);
+ assert.equal((await request('admin','applications')).applications.length,0);
+ await request('applicant','login',{login:'applicant@example.com',password:'Changed88'},401);
+ await request('applicant','login',{login:'applicant@example.com',password:'Pass1234',remember:true});
+ const newMember=(await request('applicant','state')).user;assert.equal(newMember.role,'member');assert.equal(Number(newMember.must_change),0);
+ await request('applicant','feed',null,200,'&room=all');await request('applicant','feed',null,403,'&room=board');
+ await request('applicant','register',application,403);
+ await request('applicant2','state');await request('applicant2','register',{...application,password:'Hacked88'});
+ assert.equal((await request('admin','applications')).applications.length,0);
+ await request('applicant2','login',{login:'applicant@example.com',password:'Hacked88'},401);
+ await request('applicant2','login',{login:'applicant@example.com',password:'Pass1234',remember:true});
+ assert.match(jars.applicant2.lastHeaders['set-cookie'].findLast(c=>c.startsWith('KU_FUDO_CHAT=')),/expires=/i);
+ await request('rejected','state');await request('rejected','register',{name:'削除テスト',login:'rejected@example.com',password:'Reject88'});
+ const rejected=(await request('admin','applications')).applications[0];
+ await request('admin','application_reject',{id:rejected.id});
+ await request('rejected','login',{login:'rejected@example.com',password:'Reject88'},401);
+ await request('rejected','feed',null,401,'&room=all');
+ await request('limitedApplicant','state');
+ for(let i=0;i<10;i++)await request('limitedApplicant','register',{name:'制限テスト',login:'limited@example.com',password:'Limited8'});
+ await request('limitedApplicant','register',{name:'制限テスト',login:'limited@example.com',password:'Limited8'},429);
  const policy=await php.run({code:fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)),'policy-test.php'),'utf8').replace("dirname(__DIR__) . '/ku-fudo-chat/policy.php'",JSON.stringify(path.join(app,'policy.php')))});assert.equal(policy.exitCode,0);assert(policy.text.includes('PASS'));console.log(policy.text.trim());
  console.log(`PASS: ${passed} API checks plus room isolation, reply scoping, hidden content and persistence assertions.`);
 }finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}

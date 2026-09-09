@@ -28,6 +28,10 @@ if ($method === 'GET') {
         requireAdmin($user);
         output(['users'=>query('SELECT id,login,name,role,active,must_change FROM users ORDER BY id DESC LIMIT 500')->fetchAll()]);
     }
+    if ($action === 'applications') {
+        requireAdmin($user);
+        output(['applications'=>query('SELECT id,login,name,created_at FROM applications ORDER BY id LIMIT 500')->fetchAll()]);
+    }
     fail('見つかりません。',404);
 }
 if ($method !== 'POST') { fail('許可されていない操作です。',405); }
@@ -37,6 +41,20 @@ $raw = file_get_contents('php://input',false,null,0,24001);
 if (strlen($raw)>24000) { fail('入力が大きすぎます。',413); }
 $data = json_decode($raw,true);
 if (!is_array($data)) { fail('入力形式が不正です。'); }
+if ($action === 'register') {
+    if (!query("SELECT 1 FROM users WHERE role='admin' AND active=1 LIMIT 1")->fetchColumn()) { fail('現在、申し込みを受け付けていません。',403); }
+    if (currentUser()) { fail('ログアウトしてからお申し込みください。',403); }
+    limitAttempt('register:'.hash('sha256',(string)($_SERVER['REMOTE_ADDR'] ?? 'unknown')),10,3600);
+    $login=loginValue($data);$name=value($data,'name',60,true);$password=passwordValue($data);
+    $db->beginTransaction();
+    query('DELETE FROM applications WHERE created_at<?',[time()-2592000]);
+    // Repeated requests never replace a password or alter an existing membership.
+    if (!query('SELECT 1 FROM users WHERE login=?',[$login])->fetchColumn() && !query('SELECT 1 FROM applications WHERE login=?',[$login])->fetchColumn()) {
+        if ((int)query('SELECT count(*) FROM applications')->fetchColumn()>=500) { fail('申し込みが混み合っています。管理者にご連絡ください。',429); }
+        query('INSERT INTO applications(login,name,password,created_at) VALUES(?,?,?,?)',[$login,$name,password_hash($password,PASSWORD_DEFAULT),time()]);
+    }
+    $db->commit();output(['ok'=>true]);
+}
 if ($action === 'link_login') {
     limitAttempt('link-auth:'.hash('sha256',(string)($_SERVER['REMOTE_ADDR'] ?? 'unknown')),20,900);
     $token=value($data,'token',64,true);$remember=$data['remember'] ?? false;
@@ -78,10 +96,16 @@ if ($action === 'setup' || $action === 'login') {
     } else {
         limitAttempt('login:'.hash('sha256',$login), 15, 900);
         $user=query('SELECT * FROM users WHERE login=?',[$login])->fetch();
+        if (!$user) {
+            $pending=query('SELECT password FROM applications WHERE login=?',[$login])->fetchColumn();
+            if ($pending && password_verify($password,$pending)) { fail('現在、管理者の承認待ちです。承認の連絡をお待ちください。',403); }
+        }
         $hash=$user['password'] ?? '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
         if (!password_verify($password,$hash) || !$user || !(int)$user['active']) { fail('メールアドレス（従来のID）またはパスワードを確認してください。',401); }
     }
-    signIn($user); output(['ok'=>true,'csrf'=>$_SESSION['csrf']]);
+    $remember=$data['remember'] ?? false;
+    if (!is_bool($remember)) { fail('ログイン設定を確認してください。'); }
+    signIn($user,$remember); output(['ok'=>true,'csrf'=>$_SESSION['csrf']]);
 }
 $user=requireUser();
 if ($action === 'logout') { $_SESSION=[]; session_destroy(); setcookie('KU_FUDO_CHAT','',['expires'=>time()-3600,'path'=>'/ku-fudo-chat/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']); output(['ok'=>true]); }
@@ -128,6 +152,17 @@ if ($action === 'post') {
     if (!$message) { fail('投稿が見つかりません。',404); }
     if ($user['role']!=='admin' && (int)$message['user_id']!==(int)$user['id']) { fail('この投稿を取り下げる権限がありません。',403); }
     query('UPDATE messages SET hidden=1 WHERE id=?',[$id]);audit((int)$user['id'],'hide',$id);
+} elseif ($action === 'application_approve' || $action === 'application_reject') {
+    requireAdmin($user);$id=(int)($data['id'] ?? 0);
+    $application=query('SELECT * FROM applications WHERE id=?',[$id])->fetch();
+    if (!$application) { fail('この申し込みは処理済みです。',404); }
+    if ($action === 'application_approve') {
+        if (query('SELECT 1 FROM users WHERE login=?',[$application['login']])->fetchColumn()) { fail('このメールアドレスは既に会員登録されています。申し込みを削除してください。'); }
+        // Public applicants can only become ordinary members. Promotion is a separate admin action.
+        query("INSERT INTO users(login,name,password,role,must_change,created_at) VALUES(?,?,?,'member',0,?)",[$application['login'],$application['name'],$application['password'],time()]);
+        audit((int)$user['id'],'application_approve',(int)$db->lastInsertId());
+    } else { audit((int)$user['id'],'application_reject',$id); }
+    query('DELETE FROM applications WHERE id=?',[$id]);
 } elseif ($action === 'user_create') {
     requireAdmin($user);$login=loginValue($data);$name=value($data,'name',60,true);$role=value($data,'role',15,true);
     if (!in_array($role,['member','candidate','director','admin'],true)) { fail('権限を確認してください。'); }

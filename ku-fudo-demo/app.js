@@ -6,12 +6,24 @@ const lessons=[
 ['疑問を言葉にする','分からないことを整理して、交流の準備をします。','10','理解できた点と、先生に確認したい点を分けて整理します。','Zoomで先生に聞いてみたいことを一つ挙げると？'],
 ['これからの学びを選ぶ','入門を振り返り、次の学びにつなげます。','10','入門コースを振り返り、今後のテーマやZoom参加へのつなぎ方を確認します。','これから、どのようなテーマを深めたいですか？']
 ];
-const done=new Set();let selected=0;const dialog=document.getElementById('lesson-dialog');
+const done=new Set();let selected=0,lessonReturnY=0;const dialog=document.getElementById('lesson-dialog');
 function render(){document.getElementById('lessons').innerHTML=lessons.map((l,i)=>`<button class="lesson" data-index="${i}"><div class="lesson-top"><span class="lesson-number">LESSON ${String(i+1).padStart(2,'0')}</span><span class="status ${done.has(i)?'done':''}">${done.has(i)?'✓ 完了':'未受講'}</span></div><h3>${l[0]}</h3><p>${l[1]}</p><div class="lesson-foot"><span>動画・振り返り ｜ 約${l[2]}分（仮）</span><span class="open">レッスンを開く →</span></div></button>`).join('');document.getElementById('count').textContent=done.size;document.getElementById('progress').value=done.size;document.getElementById('progress-note').textContent=done.size===6?'入門コースの体験が完了しました。':done.size?'少しずつ、学びを積み重ねています。':'まずは一つ、始めてみましょう。';document.getElementById('continue').textContent=done.size===6?'レッスンを振り返る →':done.size?'続きのレッスンを開く →':'最初のレッスンを開く →';}
-function openLesson(i){selected=i;const l=lessons[i];document.getElementById('lesson-label').textContent=`LESSON ${String(i+1).padStart(2,'0')} · 仮のレッスン`;document.getElementById('dialog-title').textContent=l[0];document.getElementById('description').textContent=l[1];document.getElementById('objective').textContent=l[3];document.getElementById('question').textContent=l[4];document.getElementById('complete').textContent=done.has(i)?'完了済み · 一覧へ戻る':'学習を完了する →';dialog.showModal();document.body.classList.add('modal-open');dialog.scrollTop=0;}
+function openLesson(i,addHistory=true){if(!Number.isInteger(i)||i<0||i>=lessons.length)return;if(!dialog.open)lessonReturnY=!addHistory&&Number.isFinite(history.state?.returnY)?history.state.returnY:window.scrollY;if(addHistory)history.pushState({kuLesson:i,returnY:lessonReturnY},'', '#lesson-'+(i+1));selected=i;const l=lessons[i];document.getElementById('lesson-label').textContent=`LESSON ${String(i+1).padStart(2,'0')} · 仮のレッスン`;document.getElementById('dialog-title').textContent=l[0];document.getElementById('description').textContent=l[1];document.getElementById('objective').textContent=l[3];document.getElementById('question').textContent=l[4];document.getElementById('complete').textContent=done.has(i)?'完了済み · 一覧へ戻る':'学習を完了する →';if(!dialog.open)dialog.showModal();document.body.classList.add('modal-open');dialog.scrollTop=0;}
 document.getElementById('lessons').addEventListener('click',e=>{const b=e.target.closest('[data-index]');if(b)openLesson(Number(b.dataset.index));});
 document.getElementById('continue').onclick=()=>openLesson(lessons.findIndex((_,i)=>!done.has(i))<0?0:lessons.findIndex((_,i)=>!done.has(i)));
-document.getElementById('close').onclick=()=>dialog.close();dialog.addEventListener('close',()=>document.body.classList.remove('modal-open'));document.getElementById('complete').onclick=()=>{done.add(selected);render();dialog.close();};render();
+function lessonFromURL(){const match=location.hash.match(/^#lesson-([1-6])$/);return match?Number(match[1])-1:null;}
+function closeLessonView(){if(dialog.open)dialog.close();document.body.classList.remove('modal-open');const y=lessonReturnY;document.querySelector('[data-index="'+selected+'"]')?.focus({preventScroll:true});requestAnimationFrame(()=>window.scrollTo({top:y,behavior:'instant'}));}
+function requestLessonClose(){if(history.state?.kuLesson===selected&&lessonFromURL()===selected){history.back();}else{history.replaceState(null,'',location.pathname+location.search+'#curriculum');closeLessonView();}}
+function syncLessonHistory(){const lesson=lessonFromURL();if(lesson!==null){if(Number.isFinite(history.state?.returnY))lessonReturnY=history.state.returnY;openLesson(lesson,false);}else if(dialog.open)closeLessonView();}
+document.getElementById('close').onclick=requestLessonClose;
+dialog.addEventListener('cancel',event=>{event.preventDefault();requestLessonClose();});
+dialog.addEventListener('close',()=>document.body.classList.remove('modal-open'));
+document.getElementById('complete').onclick=()=>{done.add(selected);render();requestLessonClose();};
+window.addEventListener('popstate',syncLessonHistory);
+render();
+const initialLesson=lessonFromURL();
+if(initialLesson!==null){if(history.state?.kuLesson===initialLesson){openLesson(initialLesson,false);}else{history.replaceState(null,'',location.pathname+location.search+'#curriculum');openLesson(initialLesson);}}
+
 
 const topButton=document.getElementById('back-to-top');
 const menu=document.querySelector('.sidebar');
@@ -34,3 +46,4 @@ document.querySelectorAll('.sidebar nav a').forEach(link=>link.addEventListener(
  link.classList.add('active');link.setAttribute('aria-current','location');
 }));
 updateMenuOffset();updateTopButton();
+

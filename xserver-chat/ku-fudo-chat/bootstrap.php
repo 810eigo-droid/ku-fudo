@@ -68,7 +68,13 @@ if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 1) {
     $db->exec('PRAGMA user_version=2');
     $db->commit();
 }
-if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 2) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 2) {
+    $db->beginTransaction();
+    $db->exec('CREATE TABLE IF NOT EXISTS applications (id INTEGER PRIMARY KEY, login TEXT NOT NULL UNIQUE, name TEXT NOT NULL, password TEXT NOT NULL, created_at INTEGER NOT NULL)');
+    $db->exec('PRAGMA user_version=3');
+    $db->commit();
+}
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 3) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
 
 function query(string $sql, array $values = []): PDOStatement {
     global $db;
