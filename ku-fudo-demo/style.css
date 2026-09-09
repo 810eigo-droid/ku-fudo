@@ -63,3 +63,9 @@ footer{padding-bottom:65px}
 .orchid-mark{object-fit:contain;flex-shrink:0}
 .workspace>header{padding-top:8px;padding-bottom:8px}
 @media(max-width:720px){.mobile-identity{gap:10px}.mobile-identity .orchid-mark{margin-left:auto;width:72px;height:48px}.mobile-identity>span{padding-left:10px}}
+
+.entrance-heading>div{min-width:0}
+.teacher-portrait{margin:0;flex-shrink:0;text-align:center}
+.teacher-portrait img{display:block;width:124px;height:96px;object-fit:cover;object-position:50% 25%;border-radius:8px}
+.teacher-portrait figcaption{font-size:14px;color:#536676;line-height:1.6;margin-top:4px}
+@media(max-width:720px){.entrance-heading{gap:12px;align-items:flex-start}.entrance-heading h1{font-size:clamp(1.125rem,5.5vw,1.6rem)}.teacher-portrait img{width:88px;height:76px}}
