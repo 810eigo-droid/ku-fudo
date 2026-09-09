@@ -87,7 +87,15 @@ if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 4) {
     $db->exec('PRAGMA user_version=5');
     $db->commit();
 }
-if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 5) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 5) {
+    $db->beginTransaction();
+    $columns=$db->query('PRAGMA table_info(users)')->fetchAll(PDO::FETCH_COLUMN,1);
+    if (!in_array('membership',$columns,true)) { $db->exec("ALTER TABLE users ADD COLUMN membership TEXT NOT NULL DEFAULT 'regular'"); }
+    $db->exec("CREATE TABLE IF NOT EXISTS materials (id INTEGER PRIMARY KEY, title TEXT NOT NULL, body TEXT NOT NULL, resource_url TEXT NOT NULL DEFAULT '', audience TEXT NOT NULL CHECK(audience IN ('free','regular')), published INTEGER NOT NULL DEFAULT 0 CHECK(published IN (0,1)), sort_order INTEGER NOT NULL DEFAULT 0, author_id INTEGER NOT NULL REFERENCES users(id), updated_at INTEGER NOT NULL)");
+    $db->exec('PRAGMA user_version=6');
+    $db->commit();
+}
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 6) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
 
 function query(string $sql, array $values = []): PDOStatement {
     global $db;
@@ -102,11 +110,19 @@ function currentUser(): ?array {
     return $user;
 }
 function publicUser(array $user): array {
-    return array_intersect_key($user, array_flip(['id','login','name','role','active','must_change'])) + ['link_login' => ($_SESSION['login_method'] ?? '') === 'link'];
+    return array_intersect_key($user, array_flip(['id','login','name','role','membership','active','must_change'])) + ['link_login' => ($_SESSION['login_method'] ?? '') === 'link'];
 }
 function requireUser(): array { $u = currentUser(); if (!$u) { fail('ログインし直してください。', 401); } return $u; }
 function requireAdmin(array $user): void { if ($user['role'] !== 'admin') { fail('管理者のみ操作できます。', 403); } }
 function roomCheck(array $user, string $room): void { if (!roomAllowed($user, $room)) { fail('このチャットを利用する権限がありません。', 403); } }
+function membershipValue(array $data, string $default='regular'): string {
+    $value=$data['membership'] ?? $default;
+    if (!in_array($value,['free','regular'],true)) { fail('会員区分を確認してください。'); }
+    return $value;
+}
+function materialAllowed(array $user,array $material): bool {
+    return $user['role']==='admin' || ((int)$material['published']===1 && ($material['audience']==='free' || ($user['membership'] ?? '')==='regular'));
+}
 function value(array $data, string $name, int $max, bool $required = false): string {
     $v = $data[$name] ?? '';
     if (!is_string($v) || !mb_check_encoding($v, 'UTF-8') || mb_strlen($v) > $max || str_contains($v, "\0")) { fail('入力形式・文字数を確認してください。'); }

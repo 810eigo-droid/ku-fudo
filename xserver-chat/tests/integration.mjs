@@ -118,7 +118,7 @@ try{
  // Personal-link login: preserve v1 data, enforce one use/expiry/roles and persistent session revocation.
  const migration=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DROP TABLE login_links');$db->exec('PRAGMA user_version=1');$db->exec('DELETE FROM limits');echo 'ok';`});assert.equal(migration.text,'ok');
  await request('admin','state');
- const migrated=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode([(int)$db->query('PRAGMA user_version')->fetchColumn(),(int)$db->query('SELECT count(*) FROM messages')->fetchColumn()]);`});const migratedInfo=JSON.parse(migrated.text);assert.equal(migratedInfo[0],5);assert(migratedInfo[1]>55);
+ const migrated=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode([(int)$db->query('PRAGMA user_version')->fetchColumn(),(int)$db->query('SELECT count(*) FROM messages')->fetchColumn()]);`});const migratedInfo=JSON.parse(migrated.text);assert.equal(migratedInfo[0],6);assert(migratedInfo[1]>55);
  await request('anon','user_link',{id:members.member.id},403); // Missing CSRF rejected before authentication.
  await request('anon','state');await request('anon','user_link',{id:members.member.id},401);
  await request('mailOther','user_link',{id:members.member.id},403);
@@ -256,6 +256,56 @@ try{
  assert.equal(retainedDelete.find(m=>m.id===keptPost.id).name,'退会済みの会員');assert(retainedDelete.some(m=>m.body==='Reply preserved'&&Number(m.parent_id)===Number(keptPost.id)));
  await request('applicant','register',{name:'再申込',login:'applicant@example.com',password:'Another8'});
  assert((await request('admin','applications')).applications.some(a=>a.login==='applicant@example.com'));assert.equal((await request('applicant','state')).user,null);
+ // Membership tiers only gate materials: free members still share all-room chat and Zoom notices.
+ await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DELETE FROM limits');`});
+ assert.equal((await request('mailOther','state')).user.membership,'regular'); // Existing users retain normal access.
+ await request('freeReader','state');await request('freeReader','register',{name:'無料テスト',login:'free-reader@example.com',password:'Free8888',membership:'regular'});
+ const freeApp=(await request('admin','applications')).applications.find(a=>a.login==='free-reader@example.com');
+ await request('admin','application_approve',{id:freeApp.id});
+ await request('freeReader','login',{login:'free-reader@example.com',password:'Free8888'});
+ const freeReader=(await request('freeReader','state')).user;assert.equal(freeReader.membership,'free');
+ await request('freeReader','post',{room:'all',body:'無料会員も投稿できます'});
+ await request('admin','post',{room:'all',kind:'notice',title:'有料Zoomの案内',body:'参加費は案内文でお知らせ',event_at:'2099-11-01T12:00',zoom_url:'https://example.com/paid-zoom'});
+ assert((await request('freeReader','feed',null,200,'&room=all')).events.some(e=>e.title==='有料Zoomの案内'));
+ await request('freeReader','feed',null,403,'&room=board');
+ const baseMaterial={title:'全会員向け',body:'無料でも学べる本文',audience:'free',published:1,sort_order:10,resource_url:'https://example.com/free-video'};
+ await request('freeReader','material_save',baseMaterial,403);
+ const freeMaterial=await request('admin','material_save',baseMaterial);
+ const regularMaterial=await request('admin','material_save',{...baseMaterial,title:'通常会員限定TITLE',body:'通常会員限定SECRET',audience:'regular',resource_url:'https://example.com/regular-secret',sort_order:20});
+ const draftMaterial=await request('admin','material_save',{...baseMaterial,title:'下書きTITLE',published:0});
+ await request('rejected','materials',null,401);
+ await request('rejected','material',null,401,'&id='+freeMaterial.id);
+ const freeList=(await request('freeReader','materials')).materials;assert.deepEqual(freeList.map(m=>m.id),[freeMaterial.id]);assert(!JSON.stringify(freeList).includes('限定'));
+ assert.equal((await request('freeReader','material',null,200,'&id='+freeMaterial.id)).material.body,baseMaterial.body);
+ await request('freeReader','material',null,404,'&id='+regularMaterial.id);
+ await request('freeReader','material',null,404,'&id='+draftMaterial.id);
+ const normalList=(await request('mailOther','materials')).materials;assert.deepEqual(normalList.map(m=>m.id),[freeMaterial.id,regularMaterial.id]);
+ await request('mailOther','material',null,200,'&id='+regularMaterial.id);
+ await request('mailOther','material',null,404,'&id='+draftMaterial.id);
+ await request('admin','material',null,200,'&id='+draftMaterial.id);
+ await request('admin','material_save',{...baseMaterial,resource_url:'javascript:alert(1)'},400);
+ await request('admin','material_save',{...baseMaterial,resource_url:'https://user:pass@example.com/'},400);
+ await request('admin','material_save',{...baseMaterial,published:2},400);
+ await request('admin','material_save',{...baseMaterial,audience:'unknown'},400);
+ await request('admin','material_save',{...baseMaterial,sort_order:-1},400);
+ await request('admin','material_save',baseMaterial,403,'','bad-token');
+ await request('admin','user_update',{id:freeReader.id,role:'member',active:1,membership:'regular'});
+ await request('freeReader','material',null,401,'&id='+regularMaterial.id);
+ await request('freeReader','state');await request('freeReader','login',{login:'free-reader@example.com',password:'Free8888'});
+ await request('freeReader','material',null,200,'&id='+regularMaterial.id);
+ await request('admin','user_update',{id:freeReader.id,role:'member',active:1,membership:'free'});
+ await request('freeReader','material',null,401,'&id='+regularMaterial.id);
+ await request('freeReader','state');await request('freeReader','login',{login:'free-reader@example.com',password:'Free8888'});
+ await request('freeReader','material',null,404,'&id='+regularMaterial.id);
+ await request('freeReader','user_update',{id:freeReader.id,role:'member',active:1,membership:'regular'},403);
+ await request('admin','material_save',{...baseMaterial,id:freeMaterial.id,published:0});
+ await request('freeReader','material',null,404,'&id='+freeMaterial.id);
+ await request('admin','material_save',{...baseMaterial,id:freeMaterial.id,body:'編集済み本文'});
+ assert.equal((await request('freeReader','material',null,200,'&id='+freeMaterial.id)).material.body,'編集済み本文');
+ await request('freeReader','material_delete',{id:freeMaterial.id},403);
+ await request('admin','material_delete',{id:freeMaterial.id});
+ await request('freeReader','material',null,404,'&id='+freeMaterial.id);
+ assert(!(await request('admin','materials')).materials.some(m=>m.id===freeMaterial.id));
  const policy=await php.run({code:fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)),'policy-test.php'),'utf8').replace("dirname(__DIR__) . '/ku-fudo-chat/policy.php'",JSON.stringify(path.join(app,'policy.php')))});assert.equal(policy.exitCode,0);assert(policy.text.includes('PASS'));console.log(policy.text.trim());
  console.log(`PASS: ${passed} API checks plus room isolation, reply scoping, hidden content and persistence assertions.`);
 }finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}

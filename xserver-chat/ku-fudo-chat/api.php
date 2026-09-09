@@ -26,7 +26,7 @@ if ($method === 'GET') {
     }
     if ($action === 'users') {
         requireAdmin($user);
-        output(['users'=>query('SELECT id,login,name,role,active,must_change FROM users WHERE deleted_at=0 ORDER BY id DESC LIMIT 500')->fetchAll()]);
+        output(['users'=>query('SELECT id,login,name,role,membership,active,must_change FROM users WHERE deleted_at=0 ORDER BY id DESC LIMIT 500')->fetchAll()]);
     }
     if ($action === 'applications') {
         requireAdmin($user);
@@ -35,6 +35,15 @@ if ($method === 'GET') {
     if ($action === 'approval_mails') {
         requireAdmin($user);
         output(['mails'=>query('SELECT m.id,m.recipient,m.status,m.attempts,m.last_attempt,u.name FROM approval_mail m JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 100')->fetchAll()]);
+    }
+    if ($action === 'materials') {
+        $where=$user['role']==='admin'?'1=1':((($user['membership'] ?? '')==='regular')?'published=1':"published=1 AND audience='free'");
+        output(['materials'=>query("SELECT id,title,audience,published,sort_order FROM materials WHERE $where ORDER BY sort_order,id LIMIT 500")->fetchAll()]);
+    }
+    if ($action === 'material') {
+        $material=query('SELECT * FROM materials WHERE id=?',[(int)($_GET['id'] ?? 0)])->fetch();
+        if (!$material || !materialAllowed($user,$material)) { fail('この教材は現在ご利用いただけません。',404); }
+        output(['material'=>$material]);
     }
     fail('見つかりません。',404);
 }
@@ -156,6 +165,23 @@ if ($action === 'post') {
     if (!$message) { fail('投稿が見つかりません。',404); }
     if ($user['role']!=='admin' && (int)$message['user_id']!==(int)$user['id']) { fail('この投稿を取り下げる権限がありません。',403); }
     query('UPDATE messages SET hidden=1 WHERE id=?',[$id]);audit((int)$user['id'],'hide',$id);
+} elseif ($action === 'material_save') {
+    requireAdmin($user);$id=(int)($data['id'] ?? 0);
+    $title=value($data,'title',120,true);$body=value($data,'body',6000,true);$url=value($data,'resource_url',1500);
+    $audience=membershipValue(['membership'=>$data['audience'] ?? 'free']);$published=$data['published'] ?? 0;$sort=$data['sort_order'] ?? 0;
+    if (!in_array($published,[0,1],true) || !is_int($sort) || $sort<0 || $sort>9999) { fail('公開状態・表示順を確認してください。'); }
+    if ($url!=='' && (!filter_var($url,FILTER_VALIDATE_URL) || parse_url($url,PHP_URL_SCHEME)!=='https' || parse_url($url,PHP_URL_USER)!==null || parse_url($url,PHP_URL_PASS)!==null)) { fail('教材リンクはhttps://から始まるURLにしてください。'); }
+    if ($id) {
+        if (!query('SELECT id FROM materials WHERE id=?',[$id])->fetchColumn()) { fail('教材が見つかりません。',404); }
+        query('UPDATE materials SET title=?,body=?,resource_url=?,audience=?,published=?,sort_order=?,updated_at=? WHERE id=?',[$title,$body,$url,$audience,$published,$sort,time(),$id]);
+    } else {
+        query('INSERT INTO materials(title,body,resource_url,audience,published,sort_order,author_id,updated_at) VALUES(?,?,?,?,?,?,?,?)',[$title,$body,$url,$audience,$published,$sort,$user['id'],time()]);$id=(int)$db->lastInsertId();
+    }
+    audit((int)$user['id'],'material_save',$id);$db->commit();output(['ok'=>true,'id'=>$id]);
+} elseif ($action === 'material_delete') {
+    requireAdmin($user);$id=(int)($data['id'] ?? 0);
+    if (!query('DELETE FROM materials WHERE id=?',[$id])->rowCount()) { fail('教材が見つかりません。',404); }
+    audit((int)$user['id'],'material_delete',$id);
 } elseif ($action === 'approval_mail_retry') {
     requireAdmin($user);$id=(int)($data['id'] ?? 0);
     $mail=query('SELECT * FROM approval_mail WHERE id=?',[$id])->fetch();
@@ -170,7 +196,8 @@ if ($action === 'post') {
     if ($action === 'application_approve') {
         if (query('SELECT 1 FROM users WHERE login=?',[$application['login']])->fetchColumn()) { fail('このメールアドレスは既に会員登録されています。申し込みを削除してください。'); }
         // Public applicants can only become ordinary members. Promotion is a separate admin action.
-        query("INSERT INTO users(login,name,password,role,must_change,created_at) VALUES(?,?,?,'member',0,?)",[$application['login'],$application['name'],$application['password'],time()]);
+        $membership=membershipValue($data,'free');
+        query("INSERT INTO users(login,name,password,role,must_change,created_at,membership) VALUES(?,?,?,'member',0,?,?)",[$application['login'],$application['name'],$application['password'],time(),$membership]);
         $newUserId=(int)$db->lastInsertId();
         audit((int)$user['id'],'application_approve',$newUserId);
         query('INSERT INTO approval_mail(user_id,recipient) VALUES(?,?)',[$newUserId,$application['login']]);
@@ -185,7 +212,8 @@ if ($action === 'post') {
     if (!is_bool($useLink) || ($useLink && $role==='admin')) { fail('管理者にはメールアドレスと仮パスワードを案内してください。'); }
     if (query('SELECT id FROM users WHERE login=?',[$login])->fetchColumn()) { fail('このメールアドレスは使われています。'); }
     $temporary=bin2hex(random_bytes(10));
-    query('INSERT INTO users(login,name,password,role,must_change,created_at) VALUES(?,?,?,?,1,?)',[$login,$name,password_hash($temporary,PASSWORD_DEFAULT),$role,time()]);
+    $membership=membershipValue($data);
+    query('INSERT INTO users(login,name,password,role,must_change,created_at,membership) VALUES(?,?,?,?,1,?,?)',[$login,$name,password_hash($temporary,PASSWORD_DEFAULT),$role,time(),$membership]);
     $id=(int)$db->lastInsertId();audit((int)$user['id'],'user_create',$id);
     $result=$useLink ? issueLoginLink(query('SELECT * FROM users WHERE id=?',[$id])->fetch(),(int)$user['id']) : ['temporary_password'=>$temporary];
     $db->commit();output(['ok'=>true]+$result);
@@ -215,6 +243,7 @@ if ($action === 'post') {
     }
     $role=value($data,'role',15,true);$active=$data['active'] ?? null;
     if (!in_array($role,['member','candidate','director','admin'],true) || !in_array($active,[0,1],true)) { fail('権限・利用状態を確認してください。'); }
-    query('UPDATE users SET role=?,active=?,version=version+1 WHERE id=?',[$role,$active,$id]);audit((int)$user['id'],'user_update',$id);
+    $target=query('SELECT membership FROM users WHERE id=?',[$id])->fetch();$membership=membershipValue($data,$target['membership']);
+    query('UPDATE users SET role=?,active=?,membership=?,version=version+1 WHERE id=?',[$role,$active,$membership,$id]);audit((int)$user['id'],'user_update',$id);
 } else { fail('見つかりません。',404); }
 $db->commit();output(['ok'=>true]);

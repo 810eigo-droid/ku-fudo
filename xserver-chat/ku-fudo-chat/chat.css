@@ -52,3 +52,5 @@
 #register-form>.primary,#login-form>.primary{width:100%;min-height:52px}
 
 button.danger{color:#9d2b32;border-color:#d6a4a8}button.danger:hover{background:#fff0f0}
+
+.material-card{display:block;margin:14px 0;padding:20px;background:white;border:1px solid var(--line);border-radius:8px;text-decoration:none}.material-card strong{display:block;font-size:20px}.material-card span{display:block;margin-top:8px;color:var(--muted);font-size:14px}.material-card:hover{border-color:#997b41}#material-title{font-size:24px;margin-top:22px}#material-resource{display:inline-block;text-decoration:none;margin-top:16px}#material-admin-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:24px}
