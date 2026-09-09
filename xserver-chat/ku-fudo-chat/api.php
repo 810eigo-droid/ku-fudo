@@ -37,6 +37,27 @@ $raw = file_get_contents('php://input',false,null,0,24001);
 if (strlen($raw)>24000) { fail('入力が大きすぎます。',413); }
 $data = json_decode($raw,true);
 if (!is_array($data)) { fail('入力形式が不正です。'); }
+if ($action === 'link_login') {
+    limitAttempt('link-auth:'.hash('sha256',(string)($_SERVER['REMOTE_ADDR'] ?? 'unknown')),20,900);
+    $token=value($data,'token',64,true);$remember=$data['remember'] ?? false;
+    if (!preg_match('/\A[a-f0-9]{64}\z/D',$token) || !is_bool($remember)) { fail('専用リンクが正しくありません。管理者に新しいリンクをご依頼ください。',403); }
+    $db->beginTransaction();
+    // The first write serializes concurrent redemption; no GET request consumes a link.
+    query('DELETE FROM login_links WHERE expires<=?',[time()]);
+    $link=query('SELECT * FROM login_links WHERE token_hash=?',[hash('sha256',$token)])->fetch();
+    $user=$link ? query('SELECT * FROM users WHERE id=?',[$link['user_id']])->fetch() : false;
+    if (!$user || !(int)$user['active'] || $user['role']==='admin' || (int)$user['version']!==(int)$link['version']) { fail('この専用リンクは期限切れ、使用済み、または無効です。管理者に新しいリンクをご依頼ください。',403); }
+    $signedIn=currentUser();
+    if ($signedIn && (int)$signedIn['id']!==(int)$user['id']) { fail('別のアカウントでログイン中です。ログアウトしてから専用リンクを開いてください。',403); }
+    query('DELETE FROM login_links WHERE user_id=?',[$user['id']]);
+    if ((int)$user['must_change']) {
+        // A one-use invitation replaces, and invalidates, any previously issued temporary password.
+        query('UPDATE users SET password=?,must_change=0,version=version+1 WHERE id=?',[password_hash(bin2hex(random_bytes(32)),PASSWORD_DEFAULT),$user['id']]);
+        $user=query('SELECT * FROM users WHERE id=?',[$user['id']])->fetch();
+    }
+    audit((int)$user['id'],'link_login',(int)$user['id']);$db->commit();
+    signIn($user,$remember,'link');output(['ok'=>true,'csrf'=>$_SESSION['csrf']]);
+}
 if ($action === 'setup' || $action === 'login') {
     $ip = hash('sha256', (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
     limitAttempt('auth:'.$ip, 20, 900);
@@ -110,10 +131,19 @@ if ($action === 'post') {
 } elseif ($action === 'user_create') {
     requireAdmin($user);$login=loginValue($data);$name=value($data,'name',60,true);$role=value($data,'role',15,true);
     if (!in_array($role,['member','candidate','director','admin'],true)) { fail('権限を確認してください。'); }
+    $useLink=$data['use_link'] ?? false;
+    if (!is_bool($useLink) || ($useLink && $role==='admin')) { fail('管理者にはメールアドレスと仮パスワードを案内してください。'); }
     if (query('SELECT id FROM users WHERE login=?',[$login])->fetchColumn()) { fail('このメールアドレスは使われています。'); }
     $temporary=bin2hex(random_bytes(10));
     query('INSERT INTO users(login,name,password,role,must_change,created_at) VALUES(?,?,?,?,1,?)',[$login,$name,password_hash($temporary,PASSWORD_DEFAULT),$role,time()]);
-    audit((int)$user['id'],'user_create',(int)$db->lastInsertId());$db->commit();output(['ok'=>true,'temporary_password'=>$temporary]);
+    $id=(int)$db->lastInsertId();audit((int)$user['id'],'user_create',$id);
+    $result=$useLink ? issueLoginLink(query('SELECT * FROM users WHERE id=?',[$id])->fetch(),(int)$user['id']) : ['temporary_password'=>$temporary];
+    $db->commit();output(['ok'=>true]+$result);
+} elseif ($action === 'user_link') {
+    requireAdmin($user);$id=(int)($data['id'] ?? 0);
+    $target=query('SELECT * FROM users WHERE id=?',[$id])->fetch();
+    if (!$target) { fail('会員が見つかりません。',404); }
+    $result=issueLoginLink($target,(int)$user['id']);$db->commit();output(['ok'=>true]+$result);
 } elseif ($action === 'user_update' || $action === 'user_reset') {
     requireAdmin($user);$id=(int)($data['id'] ?? 0);
     if ($id===(int)$user['id']) { fail('自分の権限変更・利用停止・仮パスワード発行はできません。'); }

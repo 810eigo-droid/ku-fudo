@@ -21,7 +21,7 @@ const jars={};let passed=0;
 async function request(who,action,data,expected=200,query='',csrfOverride){
  const jar=jars[who]??=( {cookie:'',csrf:''} );
  const r=await php.run({scriptPath:path.join(app,'api.php'),relativeUri:'/ku-fudo-chat/api.php?action='+action+query,protocol:'https',method:data?'POST':'GET',headers:{Host:'test.invalid',Cookie:jar.cookie,...(data?{'Content-Type':'application/json','X-CSRF-Token':csrfOverride??jar.csrf}:{})},body:data?new TextEncoder().encode(JSON.stringify(data)):undefined,$_SERVER:{HTTPS:'on',DOCUMENT_ROOT:web,REMOTE_ADDR:'192.0.2.'+(Object.keys(jars).indexOf(who)+1)}});
- const cookies=r.headers['set-cookie']??[];for(const cookie of cookies){if(cookie.startsWith('KU_FUDO_CHAT='))jar.cookie=cookie.split(';')[0];}
+ jar.lastHeaders=r.headers;const cookies=r.headers['set-cookie']??[];for(const cookie of cookies){if(cookie.startsWith('KU_FUDO_CHAT='))jar.cookie=cookie.split(';')[0];}
  let out;try{out=JSON.parse(r.text);}catch{throw new Error(`${action} invalid JSON: ${r.text} ${r.errors}`);}
  assert.equal(r.httpStatusCode,expected,`${who}/${action}: ${JSON.stringify(out)} ${r.errors}`);
  if(out.csrf)jar.csrf=out.csrf;passed++;return out;
@@ -110,6 +110,49 @@ try{
  const seed=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite'); $s=$db->prepare("INSERT INTO messages(room,user_id,body,created_at) VALUES('all',1,?,?)"); for($i=0;$i<55;$i++)$s->execute(['pagination fixture '.$i,time()]); echo 'ok';`});assert.equal(seed.text,'ok');
  const first=await request('admin','feed',null,200,'&room=all');assert.equal(first.messages.length,50);assert.equal(first.more,true);
  const second=await request('admin','feed',null,200,'&room=all&before='+first.messages.at(-1).id);assert(second.messages.length>0);assert.equal(second.more,false);assert(!second.messages.some(m=>first.messages.some(n=>n.id===m.id)));
+ // Personal-link login: preserve v1 data, enforce one use/expiry/roles and persistent session revocation.
+ const migration=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('DROP TABLE login_links');$db->exec('PRAGMA user_version=1');$db->exec('DELETE FROM limits');echo 'ok';`});assert.equal(migration.text,'ok');
+ await request('admin','state');
+ const migrated=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode([(int)$db->query('PRAGMA user_version')->fetchColumn(),(int)$db->query('SELECT count(*) FROM messages')->fetchColumn()]);`});const migratedInfo=JSON.parse(migrated.text);assert.equal(migratedInfo[0],2);assert(migratedInfo[1]>55);
+ await request('anon','user_link',{id:members.member.id},403); // Missing CSRF rejected before authentication.
+ await request('anon','state');await request('anon','user_link',{id:members.member.id},401);
+ await request('mailOther','user_link',{id:members.member.id},403);
+ await request('admin','user_link',{id:admin.user.id},400);
+ await request('admin','user_create',{login:'linkadmin@example.com',name:'invalid admin',role:'admin',use_link:true},400);
+ const noAdmin=(await request('admin','users')).users;assert(!noAdmin.some(u=>u.login==='linkadmin@example.com'));
+ const invite=await request('admin','user_create',{login:'senior@example.com',name:'入力なし会員',role:'member',use_link:true});assert.match(invite.login_token,/^[a-f0-9]{64}$/);assert(!('temporary_password' in invite));
+ const senior=(await request('admin','users')).users.find(u=>u.login==='senior@example.com');
+ const stored=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');echo json_encode($db->query('SELECT * FROM login_links')->fetchAll(PDO::FETCH_ASSOC));`});assert(!stored.text.includes(invite.login_token));
+ await request('senior','state');await request('senior','state'); // Link previews and page loads do not consume a token.
+ await request('senior','link_login',{token:invite.login_token,remember:true},403,'','bad-csrf');
+ await request('senior','link_login',{token:invite.login_token,remember:'yes'},403);
+ await request('senior','link_login',{token:invite.login_token,remember:true});
+ const rememberCookie=jars.senior.lastHeaders['set-cookie'].findLast(c=>c.startsWith('KU_FUDO_CHAT='));assert.match(rememberCookie,/expires=/i);assert.match(rememberCookie,/secure/i);assert.match(rememberCookie,/httponly/i);assert.match(rememberCookie,/samesite=strict/i);
+ const seniorState=await request('senior','state');assert.equal(seniorState.user.id,senior.id);assert.equal(Number(seniorState.user.must_change),0);assert.equal(seniorState.user.link_login,true);
+ await request('senior','post',{room:'all',body:'文字入力なしで入室できました'});await request('senior','feed',null,200,'&room=all');await request('senior','feed',null,403,'&room=board');
+ await request('replay','state');await request('replay','link_login',{token:invite.login_token,remember:true},403);
+ const expiredLink=await request('admin','user_link',{id:senior.id});
+ await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite');$db->exec('UPDATE login_links SET expires=1');`});
+ await request('replay','link_login',{token:expiredLink.login_token,remember:true},403);
+ const oldLink=await request('admin','user_link',{id:senior.id});const newLink=await request('admin','user_link',{id:senior.id});
+ await request('replay','link_login',{token:oldLink.login_token,remember:true},403);
+ await request('admin','link_login',{token:newLink.login_token,remember:true},403); // Cannot silently replace an authenticated account.
+ await request('seniorSecond','state');await request('seniorSecond','link_login',{token:newLink.login_token,remember:false});
+ const shortCookie=jars.seniorSecond.lastHeaders['set-cookie'].findLast(c=>c.startsWith('KU_FUDO_CHAT='));assert(!/expires=/i.test(shortCookie));
+ async function ageSession(who,seconds){const id=jars[who].cookie.split('=')[1];const aged=await php.run({code:`<?php session_save_path('${privateDir}/sessions');session_name('KU_FUDO_CHAT');session_id('${id}');session_start();$_SESSION['signed_at']=time()-${seconds};session_write_close();echo 'ok';`});assert.equal(aged.text,'ok');}
+ await ageSession('senior',43201);assert((await request('senior','state')).user); // Remembered login survives the old 12-hour limit.
+ await ageSession('seniorSecond',43201);assert.equal((await request('seniorSecond','state')).user,null);
+ await ageSession('senior',2592001);assert.equal((await request('senior','state')).user,null);
+ const boardInvite=await request('admin','user_create',{login:'boardlink@example.com',name:'リンク理事候補',role:'candidate',use_link:true});
+ await request('boardLink','state');await request('boardLink','link_login',{token:boardInvite.login_token,remember:true});
+ const boardLinkUser=(await request('boardLink','state')).user;await request('boardLink','feed',null,200,'&room=board');
+ const beforeRole=await request('admin','user_link',{id:boardLinkUser.id});
+ await request('admin','user_update',{id:boardLinkUser.id,role:'member',active:1});await request('boardLink','feed',null,401,'&room=board');
+ await request('replay','link_login',{token:beforeRole.login_token,remember:true},403);
+ const afterRole=await request('admin','user_link',{id:boardLinkUser.id});await request('boardLink','state');await request('boardLink','link_login',{token:afterRole.login_token,remember:true});await request('boardLink','feed',null,403,'&room=board');
+ const beforeStop=await request('admin','user_link',{id:boardLinkUser.id});await request('admin','user_update',{id:boardLinkUser.id,role:'member',active:0});await request('boardLink','feed',null,401,'&room=all');await request('replay','link_login',{token:beforeStop.login_token,remember:true},403);await request('admin','user_link',{id:boardLinkUser.id},400);
+ const beforeReset=await request('admin','user_link',{id:senior.id});await request('admin','user_reset',{id:senior.id});await request('replay','link_login',{token:beforeReset.login_token,remember:true},403);
+ const afterReset=await request('admin','user_link',{id:senior.id});await request('senior','state');await request('senior','link_login',{token:afterReset.login_token,remember:true});await request('senior','logout',{});assert.equal((await request('senior','state')).user,null);await request('senior','feed',null,401,'&room=all');
  const policy=await php.run({code:fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)),'policy-test.php'),'utf8').replace("dirname(__DIR__) . '/ku-fudo-chat/policy.php'",JSON.stringify(path.join(app,'policy.php')))});assert.equal(policy.exitCode,0);assert(policy.text.includes('PASS'));console.log(policy.text.trim());
  console.log(`PASS: ${passed} API checks plus room isolation, reply scoping, hidden content and persistence assertions.`);
 }finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}

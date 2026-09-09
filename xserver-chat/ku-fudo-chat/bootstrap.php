@@ -46,12 +46,12 @@ $sessions = $private . '/sessions';
 if (!is_dir($sessions) && !mkdir($sessions, 0700) && !is_dir($sessions)) { fail('保存先を準備できません。', 503); }
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
-ini_set('session.gc_maxlifetime', '43200');
+ini_set('session.gc_maxlifetime', '2592000');
 session_save_path($sessions);
 session_name('KU_FUDO_CHAT');
 session_set_cookie_params(['lifetime' => 0, 'path' => '/ku-fudo-chat/', 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);
 session_start();
-if (isset($_SESSION['signed_at']) && time() - (int)$_SESSION['signed_at'] > 43200) { $_SESSION = []; session_regenerate_id(true); }
+if (isset($_SESSION['signed_at']) && time() - (int)$_SESSION['signed_at'] >= min(2592000, (int)($_SESSION['lifetime'] ?? 43200))) { $_SESSION = []; session_regenerate_id(true); }
 if (!isset($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
 $db = new PDO('sqlite:' . $private . '/chat.sqlite', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 $db->exec('PRAGMA foreign_keys=ON');
@@ -61,7 +61,14 @@ if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 0) {
     $db->exec(file_get_contents(__DIR__ . '/schema.sql'));
     $db->commit();
 }
-if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 1) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
+// Upgrade existing databases in place; preserve members, messages and role assignments.
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 1) {
+    $db->beginTransaction();
+    $db->exec('CREATE TABLE IF NOT EXISTS login_links (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL UNIQUE REFERENCES users(id), version INTEGER NOT NULL, expires INTEGER NOT NULL)');
+    $db->exec('PRAGMA user_version=2');
+    $db->commit();
+}
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 2) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
 
 function query(string $sql, array $values = []): PDOStatement {
     global $db;
@@ -76,7 +83,7 @@ function currentUser(): ?array {
     return $user;
 }
 function publicUser(array $user): array {
-    return array_intersect_key($user, array_flip(['id','login','name','role','active','must_change']));
+    return array_intersect_key($user, array_flip(['id','login','name','role','active','must_change'])) + ['link_login' => ($_SESSION['login_method'] ?? '') === 'link'];
 }
 function requireUser(): array { $u = currentUser(); if (!$u) { fail('ログインし直してください。', 401); } return $u; }
 function requireAdmin(array $user): void { if ($user['role'] !== 'admin') { fail('管理者のみ操作できます。', 403); } }
@@ -107,9 +114,20 @@ function limitAttempt(string $bucket, int $max, int $seconds): void {
     $db->commit();
     if ($count > $max) { fail('操作が続いています。しばらく待ってからお試しください。', 429); }
 }
-function signIn(array $user): void {
+function signIn(array $user, bool $remember = false, string $method = 'password'): void {
     session_regenerate_id(true);
-    $_SESSION = ['uid' => (int)$user['id'], 'version' => (int)$user['version'], 'signed_at' => time(), 'csrf' => bin2hex(random_bytes(32))];
+    $lifetime = $remember ? 2592000 : 43200;
+    $_SESSION = ['uid' => (int)$user['id'], 'version' => (int)$user['version'], 'signed_at' => time(), 'lifetime' => $lifetime, 'login_method' => $method, 'csrf' => bin2hex(random_bytes(32))];
+    setcookie('KU_FUDO_CHAT',session_id(),['expires'=>$remember ? time()+$lifetime : 0,'path'=>'/ku-fudo-chat/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);
+}
+// Only the hash is stored. A link is valid for 72 hours, once, for one current membership version.
+function issueLoginLink(array $user, int $actor): array {
+    if ($user['role'] === 'admin' || !(int)$user['active']) { fail('管理者・利用停止中の会員には専用リンクを発行できません。'); }
+    query('DELETE FROM login_links WHERE user_id=? OR expires<=?',[$user['id'],time()]);
+    $token=bin2hex(random_bytes(32));$expires=time()+259200;
+    query('INSERT INTO login_links(token_hash,user_id,version,expires) VALUES(?,?,?,?)',[hash('sha256',$token),$user['id'],$user['version'],$expires]);
+    audit($actor,'login_link',(int)$user['id']);
+    return ['login_token'=>$token,'expires_at'=>$expires];
 }
 function audit(int $actor, string $action, int $target): void {
     query('INSERT INTO audit(actor,action,target,created_at) VALUES(?,?,?,?)', [$actor,$action,$target,time()]);
