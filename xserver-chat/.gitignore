@@ -1,0 +1,7 @@
+ku-fudo-private/
+config.php
+*.sqlite
+*.sqlite-*
+*.db
+sessions/
+*.log

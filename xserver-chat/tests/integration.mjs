@@ -1,0 +1,83 @@
+// Run with: node integration.mjs /absolute/path/to/node_modules
+// Test fixtures are temporary; never uses an actual server or actual membership data.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
+import assert from 'node:assert/strict';
+import { randomBytes } from 'node:crypto';
+const modules=process.argv[2];
+if(!modules)throw new Error('Pass the node_modules path containing @php-wasm/node and @php-wasm/universal');
+const {PHP}=await import(pathToFileURL(path.join(modules,'@php-wasm/universal/index.js')));
+const {loadNodeRuntime,createNodeFsMountHandler}=await import(pathToFileURL(path.join(modules,'@php-wasm/node/index.js')));
+const php=new PHP(await loadNodeRuntime('8.3',{emscriptenOptions:{processId:process.pid}}));
+const temp=fs.mkdtempSync(path.join(os.tmpdir(),'ku-fudo-test-'));
+const web=path.join(temp,'public_html');const app=path.join(web,'ku-fudo-chat');
+fs.mkdirSync(web);fs.cpSync(path.join(path.dirname(fileURLToPath(import.meta.url)),'../ku-fudo-chat'),app,{recursive:true});
+const privateDir=path.join(temp,'ku-fudo-private');fs.mkdirSync(privateDir,{mode:0o700});
+const setupKey=randomBytes(24).toString('hex');fs.writeFileSync(path.join(privateDir,'config.php'),`<?php return ['setup_key'=>'${setupKey}'];`,{mode:0o600});
+await php.mount(temp,createNodeFsMountHandler(temp));
+const jars={};let passed=0;
+async function request(who,action,data,expected=200,query='',csrfOverride){
+ const jar=jars[who]??=( {cookie:'',csrf:''} );
+ const r=await php.run({scriptPath:path.join(app,'api.php'),relativeUri:'/ku-fudo-chat/api.php?action='+action+query,protocol:'https',method:data?'POST':'GET',headers:{Host:'test.invalid',Cookie:jar.cookie,...(data?{'Content-Type':'application/json','X-CSRF-Token':csrfOverride??jar.csrf}:{})},body:data?new TextEncoder().encode(JSON.stringify(data)):undefined,$_SERVER:{HTTPS:'on',DOCUMENT_ROOT:web,REMOTE_ADDR:'192.0.2.'+(Object.keys(jars).indexOf(who)+1)}});
+ const cookies=r.headers['set-cookie']??[];for(const cookie of cookies){if(cookie.startsWith('KU_FUDO_CHAT='))jar.cookie=cookie.split(';')[0];}
+ let out;try{out=JSON.parse(r.text);}catch{throw new Error(`${action} invalid JSON: ${r.text} ${r.errors}`);}
+ assert.equal(r.httpStatusCode,expected,`${who}/${action}: ${JSON.stringify(out)} ${r.errors}`);
+ if(out.csrf)jar.csrf=out.csrf;passed++;return out;
+}
+try{
+ const extensions=await php.run({code:'<?php echo json_encode([PHP_VERSION,extension_loaded("pdo_sqlite"),extension_loaded("mbstring")]);'});console.log('Runtime:',extensions.text);
+ await request('anon','feed',null,401,'&room=all');
+ const state=await request('admin','state');assert.equal(state.setup,true);
+ assert(jars.admin.cookie.startsWith('KU_FUDO_CHAT='));
+ await request('admin','setup',{setup_key:'invalid',login:'admin',name:'運営テスト',password:'Administrator-test-123'},403);
+ await request('admin','setup',{setup_key:setupKey,login:'admin',name:'運営テスト',password:'Administrator-test-123'});
+ const admin=await request('admin','state');assert.equal(admin.user.role,'admin');
+ await request('admin','setup',{setup_key:setupKey,login:'another',name:'別管理者',password:'Administrator-test-123'},403);
+ const members={};
+ for(const role of ['member','candidate','director']){
+  const created=await request('admin','user_create',{login:role,name:'テスト '+role,role});
+  await request(role,'state');await request(role,'login',{login:role,password:created.temporary_password});
+  await request(role,'feed',null,403,'&room=all');
+  await request(role,'password',{old_password:created.temporary_password,password:'New-password-'+role+'-123'});
+  members[role]=(await request(role,'state')).user;
+ }
+ await request('admin','post',{room:'all',kind:'notice',title:'全体Zoom',area:'全地区',event_at:'2099-10-01T18:00',zoom_url:'https://example.com/meeting',body:'公開テスト案内'});
+ await request('admin','post',{room:'board',kind:'notice',title:'限定Zoom',area:'理事',event_at:'2099-10-02T18:00',zoom_url:'https://example.com/private',body:'限定内容SECRET'});
+ await request('admin','post',{room:'all',kind:'notice',title:'不正リンク',body:'test',zoom_url:'javascript:alert(1)'},400);
+ await request('admin','post',{room:'all',kind:'notice',title:'不正日時',body:'test',event_at:'2099-02-30T12:00'},400);
+ const board=await request('candidate','feed',null,200,'&room=board');const boardId=Number(board.messages[0].id);assert.equal(board.events.length,1);
+ const all=await request('member','feed',null,200,'&room=all');assert(!JSON.stringify(all).includes('SECRET'));assert.equal(all.events[0].title,'全体Zoom');const allId=Number(all.messages[0].id);
+ await request('member','feed',null,403,'&room=board');
+ await request('member','post',{room:'board',body:'侵入',kind:'chat'},403);
+ await request('member','post',{room:'all',body:'誤った返信',parent_id:boardId},404);
+ await request('member','hide',{room:'all',id:boardId},404);
+ await request('member','post',{room:'all',kind:'notice',title:'偽のお知らせ',body:'test'},403);
+ await request('member','users',null,403);
+ await request('member','user_create',{login:'hacker',name:'test',role:'admin'},403);
+ await request('member','user_update',{id:members.member.id,role:'admin',active:1},403);
+ await request('member','post',{room:'all',body:'csrf test'},403,'','bad-token');
+ await request('member','post',{room:'all',body:'質問です <script>alert(1)</script>',parent_id:allId});
+ let feed=await request('admin','feed',null,200,'&room=all');const reply=feed.messages[0];assert.equal(Number(reply.parent_id),allId);assert(feed.messages.some(m=>m.body.includes('<script>')));
+ await request('director','post',{room:'board',body:'理事の返信',parent_id:boardId});
+ await request('candidate','post',{room:'board',body:'候補の返信',parent_id:boardId});
+ await request('member','hide',{room:'all',id:allId},403);
+ await request('admin','hide',{room:'all',id:allId});
+ feed=await request('member','feed',null,200,'&room=all');assert.equal(feed.events.length,0);assert.equal(feed.messages.find(m=>Number(m.id)===allId).body,'');assert.equal(feed.messages.find(m=>Number(m.id)===Number(reply.id)).parent_preview,'非表示の投稿');
+ await request('admin','user_update',{id:members.candidate.id,role:'member',active:1});
+ await request('candidate','feed',null,401,'&room=board');
+ await request('candidate','state');await request('candidate','login',{login:'candidate',password:'New-password-candidate-123'});await request('candidate','feed',null,403,'&room=board');
+ await request('admin','user_update',{id:members.director.id,role:'director',active:0});await request('director','feed',null,401,'&room=board');
+ await request('member','logout',{});await request('member','feed',null,401,'&room=all');
+ await request('member','state');await request('member','login',{login:'member',password:'New-password-member-123'});
+ feed=await request('member','feed',null,200,'&room=all');assert(feed.messages.some(m=>Number(m.id)===Number(reply.id)));
+ await request('admin','user_update',{id:admin.user.id,role:'member',active:0},400);
+ const reset=await request('admin','user_reset',{id:members.member.id});await request('member','feed',null,401,'&room=all');
+ await request('member','state');await request('member','login',{login:'member',password:reset.temporary_password});await request('member','feed',null,403,'&room=all');
+ const seed=await php.run({code:`<?php $db=new PDO('sqlite:${privateDir}/chat.sqlite'); $s=$db->prepare("INSERT INTO messages(room,user_id,body,created_at) VALUES('all',1,?,?)"); for($i=0;$i<55;$i++)$s->execute(['pagination fixture '.$i,time()]); echo 'ok';`});assert.equal(seed.text,'ok');
+ const first=await request('admin','feed',null,200,'&room=all');assert.equal(first.messages.length,50);assert.equal(first.more,true);
+ const second=await request('admin','feed',null,200,'&room=all&before='+first.messages.at(-1).id);assert(second.messages.length>0);assert.equal(second.more,false);assert(!second.messages.some(m=>first.messages.some(n=>n.id===m.id)));
+ const policy=await php.run({code:fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)),'policy-test.php'),'utf8').replace("dirname(__DIR__) . '/ku-fudo-chat/policy.php'",JSON.stringify(path.join(app,'policy.php')))});assert.equal(policy.exitCode,0);assert(policy.text.includes('PASS'));console.log(policy.text.trim());
+ console.log(`PASS: ${passed} API checks plus room isolation, reply scoping, hidden content and persistence assertions.`);
+}finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}

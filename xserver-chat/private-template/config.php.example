@@ -1,0 +1,5 @@
+<?php
+// public_html の外側に ku-fudo-private フォルダを作り、config.php として置きます。
+// パスワードマネージャー等で生成した32文字以上のランダムな値を設定してください。
+// この値・実際のconfig.php・データベースをGitHubへ保存しないでください。
+return ['setup_key' => ''];
