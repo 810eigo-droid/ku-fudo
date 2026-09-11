@@ -69,3 +69,17 @@ footer{padding-bottom:65px}
 .teacher-portrait img{display:block;width:124px;height:96px;object-fit:cover;object-position:50% 25%;border-radius:8px}
 .teacher-portrait figcaption{font-size:14px;color:#536676;line-height:1.6;margin-top:4px}
 @media(max-width:720px){.entrance-heading{gap:12px;align-items:flex-start}.entrance-heading h1{font-size:clamp(1.125rem,5.5vw,1.6rem)}.teacher-portrait img{width:88px;height:76px}}
+
+/* Keep the operator name readable on small screens. */
+.sidebar>.brand{font-size:22px;letter-spacing:.02em;overflow-wrap:anywhere}
+@media(max-width:720px){.mobile-identity{flex-wrap:wrap;gap:4px 10px}.mobile-identity>a{font-size:22px;letter-spacing:.02em}.mobile-identity>span{font-size:13px}.mobile-identity .orchid-mark{width:44px;height:32px}}
+
+@media(min-width:721px){.sidebar>.brand{white-space:nowrap;overflow-wrap:normal}}
+
+/* Mobile: two text rows with the orchid beside both rows. */
+@media(max-width:720px){
+ .mobile-identity{display:grid;grid-template-columns:minmax(0,1fr) clamp(64px,20vw,96px);grid-template-rows:auto auto;column-gap:10px;row-gap:2px;padding:12px 20px;align-items:center}
+ .mobile-identity>a{grid-column:1;grid-row:1;font-size:clamp(18px,5vw,22px);letter-spacing:0;line-height:1.45;white-space:nowrap}
+ .mobile-identity>span{grid-column:1;grid-row:2;border-left:0;padding-left:0;font-size:14px;line-height:1.5}
+ .mobile-identity .orchid-mark{grid-column:2;grid-row:1 / 3;width:100%;height:64px;margin:0;align-self:center;object-fit:contain}
+}

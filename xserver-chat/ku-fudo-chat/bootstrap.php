@@ -102,7 +102,32 @@ if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 6) {
     $db->exec('PRAGMA user_version=7');
     $db->commit();
 }
-if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 7) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 7) {
+    $db->beginTransaction();
+    $columns=$db->query('PRAGMA table_info(users)')->fetchAll(PDO::FETCH_COLUMN,1);
+    if (!in_array('chat_access',$columns,true)) { $db->exec('ALTER TABLE users ADD COLUMN chat_access INTEGER NOT NULL DEFAULT 1'); }
+    if (!in_array('redo_mail',$columns,true)) { $db->exec('ALTER TABLE users ADD COLUMN redo_mail INTEGER NOT NULL DEFAULT 1'); }
+    $db->exec("CREATE TABLE IF NOT EXISTS redo_terms (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), year INTEGER NOT NULL, joined_on TEXT NOT NULL, paid_on TEXT NOT NULL, amount INTEGER NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, note TEXT NOT NULL DEFAULT '', UNIQUE(user_id,year))");
+    $db->exec("CREATE TABLE IF NOT EXISTS redo_issues (id INTEGER PRIMARY KEY, number TEXT NOT NULL, series TEXT NOT NULL DEFAULT 'XXⅨ', issued_on TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, pdf_key TEXT NOT NULL DEFAULT '', published INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
+    $db->exec("CREATE TABLE IF NOT EXISTS redo_deliveries (id INTEGER PRIMARY KEY, issue_id INTEGER NOT NULL REFERENCES redo_issues(id), user_id INTEGER NOT NULL REFERENCES users(id), recipient TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, attempted_at INTEGER NOT NULL DEFAULT 0, UNIQUE(issue_id,user_id))");
+    $db->exec('CREATE INDEX IF NOT EXISTS redo_delivery_status ON redo_deliveries(issue_id,status,id)');
+    $db->exec('PRAGMA user_version=8');
+    $db->commit();
+}
+// Prayer participation is separate from chat roles and paid REDO membership.
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 8) {
+    $db->beginTransaction();
+    // Acquire the SQLite write lock, then recheck for a concurrent first request.
+    $db->exec('UPDATE users SET version=version WHERE id=(SELECT min(id) FROM users)');
+    if ((int)$db->query('PRAGMA user_version')->fetchColumn() === 8) {
+        $db->exec("CREATE TABLE IF NOT EXISTS prayer_members (user_id INTEGER PRIMARY KEY REFERENCES users(id), number INTEGER NOT NULL UNIQUE CHECK(number>0), enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)), start_month TEXT NOT NULL, end_month TEXT NOT NULL DEFAULT '')");
+        $db->exec("CREATE TABLE IF NOT EXISTS prayer_reports (id INTEGER PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id), month TEXT NOT NULL, number INTEGER NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL, humanity INTEGER NOT NULL, vision INTEGER NOT NULL, return_point INTEGER NOT NULL, other_prayer INTEGER NOT NULL, gratitude INTEGER NOT NULL, meditation INTEGER NOT NULL, listening INTEGER NOT NULL, reflection TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL DEFAULT 1, updated_at INTEGER NOT NULL, receipt_status TEXT NOT NULL DEFAULT 'pending', receipt_at INTEGER NOT NULL DEFAULT 0, UNIQUE(user_id,month))");
+        $db->exec('CREATE INDEX IF NOT EXISTS prayer_reports_month ON prayer_reports(month,user_id)');
+        $db->exec('PRAGMA user_version=9');
+    }
+    $db->commit();
+}
+if ((int)$db->query('PRAGMA user_version')->fetchColumn() !== 9) { fail('対応していないデータ形式です。管理者に連絡してください。', 503); }
 
 function query(string $sql, array $values = []): PDOStatement {
     global $db;
@@ -117,7 +142,7 @@ function currentUser(): ?array {
     return $user;
 }
 function publicUser(array $user): array {
-    return array_intersect_key($user, array_flip(['id','login','name','role','membership','active','must_change'])) + ['link_login' => ($_SESSION['login_method'] ?? '') === 'link'];
+    return array_intersect_key($user, array_flip(['id','login','name','role','membership','active','must_change','chat_access','redo_mail'])) + ['link_login' => ($_SESSION['login_method'] ?? '') === 'link'];
 }
 function requireUser(): array { $u = currentUser(); if (!$u) { fail('ログインし直してください。', 401); } return $u; }
 function requireAdmin(array $user): void { if ($user['role'] !== 'admin') { fail('管理者のみ操作できます。', 403); } }
@@ -128,7 +153,7 @@ function membershipValue(array $data, string $default='regular'): string {
     return $value;
 }
 function materialAllowed(array $user,array $material): bool {
-    return $user['role']==='admin' || ((int)$material['published']===1 && ($material['audience']==='free' || ($user['membership'] ?? '')==='regular'));
+    return $user['role']==='admin' || ((int)($user['chat_access'] ?? 1)===1 && (int)$material['published']===1 && ($material['audience']==='free' || ($user['membership'] ?? '')==='regular'));
 }
 function value(array $data, string $name, int $max, bool $required = false): string {
     $v = $data[$name] ?? '';
@@ -194,11 +219,11 @@ function sendApprovalMail(int $id): string {
         $validUrl=is_string($url) && filter_var($url,FILTER_VALIDATE_URL) && parse_url($url,PHP_URL_SCHEME)==='https' && parse_url($url,PHP_URL_USER)===null && parse_url($url,PHP_URL_PASS)===null;
         $recipient=$entry['recipient'];
         if ($enabled && $validFrom && $validUrl && function_exists('mail') && (int)$entry['active'] && $entry['login']===$recipient && filter_var($recipient,FILTER_VALIDATE_EMAIL) && !preg_match('/[\r\n]/',$recipient)) {
-            $subject=mb_encode_mimeheader('【献文舎】会員登録が承認されました','UTF-8','B',"\r\n");
-            $sender='=?UTF-8?B?'.base64_encode('献文舎 会員サイト').'?=';
-            $text=$entry['name']." 様\n\n会員登録が承認されました。\n以下のリンクを開いて、チャットにログインしてください。\n\n".$url."\n\n登録時のメールアドレスとパスワードをご入力ください。\n皆さんの投稿やZoom会議の予定をご覧いただけます。\n教材を見るときは、ログイン後に「教材を見る」ボタン、または上部メニューの「教材」を押してください。\n\n献文舎 会員サイト\nお問い合わせ：".$from;
+            $subject=mb_encode_mimeheader('【じねんネットワーク】会員登録が承認されました','UTF-8','B',"\r\n");
+            $sender='=?UTF-8?B?'.base64_encode('じねんネットワーク 会員サイト').'?=';
+            $text=$entry['name']." 様\n\n会員登録が承認されました。\n以下のリンクを開いて、チャットにログインしてください。\n\n".$url."\n\n登録時のメールアドレスとパスワードをご入力ください。\n皆さんの投稿やZoom会議の予定をご覧いただけます。\nカリキュラムを見るときは、ログイン後に「カリキュラムを見る」ボタン、または上部メニューの「カリキュラム」を押してください。\n\nじねんネットワーク 会員サイト\nお問い合わせ：".$from;
             $escape=fn(string $value): string => htmlspecialchars($value,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
-            $html='<!doctype html><html lang="ja"><meta charset="utf-8"><body style="font-family:sans-serif;color:#203448;line-height:1.8;font-size:18px"><p>'.$escape($entry['name']).' 様</p><h1 style="font-size:24px">会員登録が承認されました</h1><p>こちらからチャットにログインできます。</p><p><a href="'.$escape($url).'" style="display:inline-block;background:#142c40;color:white;padding:16px 28px;border-radius:8px;text-decoration:none;font-weight:bold">チャットを開く →</a></p><p>登録時のメールアドレスとパスワードをご入力ください。</p><p>皆さんの投稿やZoom会議の予定をご覧いただけます。</p><p>教材を見るときは、ログイン後に<strong>「教材を見る」ボタン</strong>、または上部メニューの<strong>「教材」</strong>を押してください。</p><p style="font-size:14px">ボタンが開けない場合：<br><a href="'.$escape($url).'">'.$escape($url).'</a></p><p>献文舎 会員サイト<br>お問い合わせ：'.$escape($from).'</p></body></html>';
+            $html='<!doctype html><html lang="ja"><meta charset="utf-8"><body style="font-family:sans-serif;color:#203448;line-height:1.8;font-size:18px"><p>'.$escape($entry['name']).' 様</p><h1 style="font-size:24px">会員登録が承認されました</h1><p>こちらからチャットにログインできます。</p><p><a href="'.$escape($url).'" style="display:inline-block;background:#142c40;color:white;padding:16px 28px;border-radius:8px;text-decoration:none;font-weight:bold">チャットを開く →</a></p><p>登録時のメールアドレスとパスワードをご入力ください。</p><p>皆さんの投稿やZoom会議の予定をご覧いただけます。</p><p>カリキュラムを見るときは、ログイン後に<strong>「カリキュラムを見る」ボタン</strong>、または上部メニューの<strong>「カリキュラム」</strong>を押してください。</p><p style="font-size:14px">ボタンが開けない場合：<br><a href="'.$escape($url).'">'.$escape($url).'</a></p><p>じねんネットワーク 会員サイト<br>お問い合わせ：'.$escape($from).'</p></body></html>';
             $boundary='ku_fudo_'.bin2hex(random_bytes(16));
             $part=fn(string $type,string $body): string => '--'.$boundary."\r\nContent-Type: ".$type."; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n".chunk_split(base64_encode($body),76,"\r\n");
             $body=$part('text/plain',$text).$part('text/html',$html).'--'.$boundary."--\r\n";

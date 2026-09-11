@@ -38,3 +38,4 @@ CREATE TABLE IF NOT EXISTS audit (
  created_at INTEGER NOT NULL
 );
 PRAGMA user_version=1;
+

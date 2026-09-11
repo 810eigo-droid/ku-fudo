@@ -31,7 +31,7 @@ if ($method === 'GET') {
     }
     if ($action === 'users') {
         requireAdmin($user);
-        output(['users'=>query('SELECT id,login,name,role,membership,active,must_change FROM users WHERE deleted_at=0 ORDER BY id DESC LIMIT 500')->fetchAll()]);
+        output(['users'=>query('SELECT id,login,name,role,membership,active,must_change,chat_access FROM users WHERE deleted_at=0 ORDER BY id DESC LIMIT 500')->fetchAll()]);
     }
     if ($action === 'applications') {
         requireAdmin($user);
@@ -42,6 +42,7 @@ if ($method === 'GET') {
         output(['mails'=>query('SELECT m.id,m.recipient,m.status,m.attempts,m.last_attempt,u.name FROM approval_mail m JOIN users u ON u.id=m.user_id ORDER BY m.id DESC LIMIT 100')->fetchAll()]);
     }
     if ($action === 'materials') {
+        roomCheck($user,'all');
         $where=$user['role']==='admin'?'1=1':((($user['membership'] ?? '')==='regular')?'published=1':"published=1 AND audience='free'");
         output(['materials'=>query("SELECT id,title,audience,published,sort_order FROM materials WHERE $where ORDER BY sort_order,id LIMIT 500")->fetchAll()]);
     }
@@ -251,6 +252,10 @@ if ($action === 'post') {
     // Preserve reply chains but remove account identity, credentials and login capability.
     query('DELETE FROM login_links WHERE user_id=?',[$id]);
     query('DELETE FROM approval_mail WHERE user_id=?',[$id]);
+    query('DELETE FROM redo_deliveries WHERE user_id=?',[$id]);
+    query('DELETE FROM redo_terms WHERE user_id=?',[$id]);
+    query('DELETE FROM prayer_reports WHERE user_id=?',[$id]);
+    query('DELETE FROM prayer_members WHERE user_id=?',[$id]);
     query('DELETE FROM applications WHERE login=?',[$target['login']]);
     query("UPDATE users SET login=?,name='退会済みの会員',password=?,role='member',active=0,must_change=0,version=version+1,deleted_at=? WHERE id=?",['deleted-'.$id.'-'.bin2hex(random_bytes(12)).'@invalid.example',password_hash(bin2hex(random_bytes(32)),PASSWORD_DEFAULT),time(),$id]);
     audit((int)$user['id'],'user_delete',$id);

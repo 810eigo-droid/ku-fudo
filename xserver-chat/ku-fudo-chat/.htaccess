@@ -3,6 +3,7 @@ DirectoryIndex index.php
 <FilesMatch "(?i)\.(sql|sqlite|sqlite3|db|log|ini|bak|example)$">
   Require all denied
 </FilesMatch>
-<Files "bootstrap.php">
+<FilesMatch "^(bootstrap|redo-lib|prayer-lib|policy)\.php$">
   Require all denied
-</Files>
+</FilesMatch>
+
