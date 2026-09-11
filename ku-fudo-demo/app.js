@@ -1,10 +1,23 @@
 "use strict";
-const checks = [...document.querySelectorAll('[data-lesson]')];
-function updateProgress(){document.getElementById('progress-text').textContent=`視聴の目印：${checks.filter(c=>c.checked).length} / 6 本`;}
-checks.forEach(check=>check.addEventListener('change',updateProgress));
-window.addEventListener('pageshow',updateProgress);
 const topButton=document.getElementById('back-to-top');
-function updateTop(){topButton.hidden=window.scrollY<240;}
-window.addEventListener('scroll',updateTop,{passive:true});
-topButton.addEventListener('click',()=>{window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});document.querySelector('.brand').focus({preventScroll:true});});
-updateTop();updateProgress();
+const menu=document.querySelector('.sidebar');
+function updateMenuOffset(){
+ const mobile=window.matchMedia('(max-width:720px)').matches;
+ const bar=mobile?menu:document.querySelector('.workspace>header');
+ document.documentElement.style.setProperty('--menu-offset',Math.ceil(bar.getBoundingClientRect().height+14)+'px');
+}
+function updateTopButton(){topButton.hidden=window.scrollY<240;}
+window.addEventListener('scroll',updateTopButton,{passive:true});
+window.addEventListener('resize',updateMenuOffset);
+if('ResizeObserver' in window){const observer=new ResizeObserver(updateMenuOffset);observer.observe(menu);observer.observe(document.querySelector('.workspace>header'));}
+topButton.addEventListener('click',()=>{
+ window.scrollTo({top:0,behavior:window.matchMedia('(prefers-reduced-motion:reduce)').matches?'instant':'smooth'});
+ const firstLink=menu.querySelector('nav a');
+ firstLink.focus({preventScroll:true});
+});
+document.querySelectorAll('.sidebar nav a').forEach(link=>link.addEventListener('click',()=>{
+ document.querySelectorAll('.sidebar nav a').forEach(item=>{item.classList.remove('active');item.removeAttribute('aria-current');});
+ link.classList.add('active');link.setAttribute('aria-current','location');
+}));
+updateMenuOffset();updateTopButton();
+
