@@ -42,6 +42,8 @@ header("Content-Security-Policy: default-src 'self'; script-src 'none'; style-sr
 <section class="card"><h2>ログインして記録を開く</h2><p>登録したメールアドレスとパスワードでログインしてください。初回パスワード変更の案内が出た場合は、変更を済ませてください。</p><a class="primary" href="./?account=1">ログイン画面を開く</a><p>ログイン後、ブラウザーの「戻る」でこの画面へ戻り、下のボタンを押してください。</p><a class="secondary" href="learning.php">マイページを開く</a></section>
 <?php else: ?>
 <p><?= $escape($u['name']) ?>さんの記録です。メモはチャットに公開されません。</p>
+<p class="learning-disclosure">コースのご案内のため、管理者が視聴状況を確認します。自分のメモは管理画面には表示されません。</p>
+<?php if ($u['role']==='admin'): ?><p><a class="secondary" href="learning-admin.php">会員の視聴状況を確認する →</a></p><?php endif; ?>
 <section class="progress"><h2>人間やりなおし</h2><p><strong><?= $count ?></strong> / 6 レッスン視聴済み</p><progress value="<?= $count ?>" max="6"><?= $count ?>/6</progress></section>
 <p>視聴済みにチェックし、気づいたことを書いて「保存する」を押してください。あとから書き直すこともできます。</p>
 <?php if ($error): ?><p class="alert" role="alert"><?= $escape($error) ?></p><?php endif; ?>
