@@ -1,4 +1,3 @@
-"use strict";
 const topButton=document.getElementById('back-to-top');
 const menu=document.querySelector('.sidebar');
 function updateMenuOffset(){
@@ -21,3 +20,16 @@ document.querySelectorAll('.sidebar nav a').forEach(link=>link.addEventListener(
 }));
 updateMenuOffset();updateTopButton();
 
+
+const checks=[...document.querySelectorAll('[data-lesson]')];
+function updateProgress(){
+ const count=checks.filter(c=>c.checked).length;
+ document.getElementById('progress-text').textContent=`視聴の目印：${count} / 6 本`;
+ document.getElementById('count').textContent=count;
+ document.getElementById('progress').value=count;
+ document.getElementById('progress-note').textContent=count===6?'6本の視聴が完了しました。':count?'少しずつ、学びを積み重ねています。':'まずは一つ、始めてみましょう。';
+ const next=checks.findIndex(c=>!c.checked);const link=document.getElementById('continue');
+ link.href=next<0?'#curriculum':document.querySelectorAll('.watch')[next].href;
+ link.textContent=count===6?'レッスンを振り返る →':count?'続きのレッスンを開く →':'最初のレッスンを開く →';
+}
+checks.forEach(c=>c.addEventListener('change',updateProgress));window.addEventListener('pageshow',updateProgress);updateProgress();
