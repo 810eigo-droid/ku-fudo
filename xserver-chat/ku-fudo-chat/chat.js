@@ -29,6 +29,8 @@ async function start(){
  $('account').hidden=false;$('identity').textContent=user.name+' さん ／ '+roleNames[user.role]+' ／ '+membershipNames[user.membership]+' ／ '+user.login;
  const required=Number(user.must_change)===1;$('password-required').hidden=!required;$('password-details').open=required;$('email-details').hidden=required||user.link_login;$('password-details').hidden=!!user.link_login;$('link-account-note').hidden=!user.link_login;
  $('chat-panel').hidden=required;$('navigation').hidden=required;$('admin-panel').hidden=required||user.role!=='admin';
+ $('minutes-link').hidden=true;$('district-notice-link').hidden=true;
+ fetch('operations.php?access=1',{credentials:'same-origin',cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(p=>{if(user&&!Number(user.must_change)){$('minutes-link').hidden=!p.board;$('district-notice-link').hidden=!p.notice;}}).catch(()=>{});
  $('board-button').hidden=user.role==='member';$('kind-label').hidden=user.role!=='admin';
  if(required){status('初回パスワードを変更してください。');return;}
  if(new URLSearchParams(location.search).has('prayer')){const month=new URLSearchParams(location.search).get('month')||'';location.replace('prayer.php'+(/^20\d{2}-(0[1-9]|1[0-2])$/.test(month)?'?month='+month:''));return;}

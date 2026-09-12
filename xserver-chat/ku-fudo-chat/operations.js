@@ -1,0 +1,6 @@
+"use strict";
+const form=document.getElementById('minutes-form'),topics=document.getElementById('topics'),add=document.getElementById('add-topic');
+let dirty=false;form.addEventListener('input',()=>dirty=true);form.addEventListener('submit',()=>dirty=false);window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
+function renumber(){[...topics.children].forEach((row,i)=>{row.querySelector('legend').textContent='議題 '+(i+1);row.querySelectorAll('[data-field]').forEach(el=>el.name=`topics[${i}][${el.dataset.field}]`);});add.disabled=topics.children.length>=30;}
+add.addEventListener('click',()=>{if(topics.children.length>=30)return;const row=topics.firstElementChild.cloneNode(true);row.querySelectorAll('input,textarea').forEach(el=>el.value='');topics.append(row);renumber();dirty=true;row.querySelector('input').focus();document.getElementById('topic-status').textContent='議題を追加しました。';});
+topics.addEventListener('click',e=>{const button=e.target.closest('.remove-topic');if(!button)return;const row=button.closest('.topic');if([...row.querySelectorAll('input,textarea')].some(el=>el.value.trim())&&!confirm('この議題の入力内容を削除しますか？'))return;if(topics.children.length===1){row.querySelectorAll('input,textarea').forEach(el=>el.value='');}else{row.remove();}dirty=true;renumber();add.focus();});renumber();
