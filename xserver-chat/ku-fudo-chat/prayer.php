@@ -1,10 +1,12 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
+require __DIR__.'/mail-center-lib.php';
 $u=currentUser();if (!$u || (int)$u['must_change']) {
     $month=$_GET['month'] ?? ''; $suffix=is_string($month)&&preg_match('/\A20[0-9]{2}-(0[1-9]|1[0-2])\z/D',$month)?'&month='.$month:'';
     header('Location: ./?prayer=1'.$suffix);exit;
 }
+mcSchema();
 header('Content-Type: text/html; charset=utf-8');
 header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
 ?>
@@ -12,6 +14,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-sr
 <header class="masthead"><a class="brand" href="../ku-fudo-demo/">じねんネットワーク<span>会員サイト</span></a></header>
 <nav class="navigation" aria-label="祈りの蓄積メニュー"><a href="prayer.php" aria-current="page">祈りの蓄積</a><a href="../ku-fudo-demo/">カリキュラム</a><a id="chat-link" href="./" hidden>チャット</a><a href="redo.php">REDO MAIL</a><a id="manage-link" href="?manage=1" hidden>集計・参加者管理</a><a href="./?account=1">アカウント</a></nav>
 <main class="prayer-main"><h1>祈りの蓄積</h1><p class="prayer-intro">平和を願う日々の実践を、月ごとに記録します。無理のない範囲でご参加ください。</p><p id="status" role="status" aria-live="polite">読み込んでいます…</p>
+<?php $bulletins=query("SELECT * FROM mail_bulletins WHERE kind='prayer' AND state='published' ORDER BY id DESC LIMIT 12")->fetchAll();foreach($bulletins as $bulletin):if($u['role']!=='admin'&&!mcEligible($u,$bulletin))continue;?><section class="card"><h2><?= htmlspecialchars($bulletin['title'],ENT_QUOTES,'UTF-8') ?></h2><p class="message-body"><?= htmlspecialchars($bulletin['body'],ENT_QUOTES,'UTF-8') ?></p></section><?php endforeach;?>
 <section id="unavailable" class="card" hidden><h2>参加登録をご確認ください</h2><p>担当者が参加番号を登録すると、ここから報告できます。</p><a class="secondary" href="../ku-fudo-demo/">会員サイトの入口へ</a></section>
 <section id="personal" hidden><section id="entry" class="card"><h2>毎月の実践を報告する</h2><p id="identity"></p><form id="report-form"><label>報告する月<input id="report-month" name="month" type="month" required></label><p class="help">その月の1日〜末日までの合計です。翌月1〜7日ごろを目安にご報告ください。実践がなかった項目は「0」のままで大丈夫です。</p><p id="existing-note"></p><fieldset id="values"><legend>実践の合計</legend><label class="practice-field" for="humanity"><span>人類愛の祈り</span><span class="number-unit"><input id="humanity" name="humanity" type="text" inputmode="numeric" maxlength="12" required value="0" autocomplete="off"><b>回</b></span></label>
 <label class="practice-field" for="vision"><span>大構想の祈り</span><span class="number-unit"><input id="vision" name="vision" type="text" inputmode="numeric" maxlength="12" required value="0" autocomplete="off"><b>回</b></span></label>
@@ -23,7 +26,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-sr
 <section id="review" class="card" hidden tabindex="-1"><h2>この内容で報告します</h2><p id="review-identity"></p><div id="review-values"></div><p class="help">記録は本人と管理者だけが確認できます。送信すると、ご本人のメールアドレスに控えを送ります。</p><div class="prayer-actions"><button id="submit-report" class="primary" type="button">この内容で送信する</button><button id="edit-report" class="secondary" type="button">入力に戻る</button></div></section>
 <section id="success" class="card" hidden tabindex="-1"><h2>報告を保存しました</h2><p id="receipt-note"></p><button id="receipt-retry" class="secondary" type="button" hidden>控えメールを再送する</button><p><button id="edit-saved" type="button" class="secondary">保存した内容を見る・修正する</button></p></section>
 <section id="history-section" class="card"><h2>これまでの記録</h2><div id="history"></div><button id="history-more" class="secondary" type="button" hidden>以前の記録を見る</button></section></section>
-<section id="management" hidden><section class="card"><h2>月別の集計・提出状況</h2><form id="summary-form"><label>集計する月<input id="summary-month" type="month" required></label><button class="primary">表示する</button></form><p id="summary-count"></p><div id="totals" class="prayer-totals"></div><p><a id="csv-link" class="secondary">一覧をCSVで保存する</a></p><div id="reports"></div><button id="summary-more" type="button" class="secondary" hidden>続きを見る</button></section>
+<section id="management" hidden><p><a class="primary" href="mail-center.php">今月の入力案内をメールで送る →</a></p><section class="card"><h2>月別の集計・提出状況</h2><form id="summary-form"><label>集計する月<input id="summary-month" type="month" required></label><button class="primary">表示する</button></form><p id="summary-count"></p><div id="totals" class="prayer-totals"></div><p><a id="csv-link" class="secondary">一覧をCSVで保存する</a></p><div id="reports"></div><button id="summary-more" type="button" class="secondary" hidden>続きを見る</button></section>
 <section class="card"><h2>参加者の登録・変更</h2><p>登録済みの会員から選び、参加番号を設定してください。新しい方は先に会員登録・承認を行ってください。</p><a href="./?account=1#admin-panel">会員管理を開く</a><div id="members"></div><button id="members-more" class="secondary" type="button" hidden>次の会員を見る</button></section>
 <section id="member-editor" class="card" hidden tabindex="-1"><h2 id="member-title">参加設定</h2><form id="member-form"><input id="member-id" type="hidden"><label>参加番号<input id="member-number" type="text" inputmode="numeric" required maxlength="6"></label><label>参加開始月<input id="member-start" type="month" required></label><label>参加終了月（継続中は空欄）<input id="member-end" type="month"></label><label>利用状態<select id="member-enabled"><option value="1">利用できる</option><option value="0">利用を停止する</option></select></label><p class="help">参加期間に含まれる月を提出状況の確認対象にします。利用を停止しても、提出済みの記録は管理者の集計に残ります。</p><button class="primary">参加設定を保存する</button></form></section></section>
 <p><a href="../ku-fudo-demo/">← 会員サイトの入口へ</a></p></main><script src="prayer.js?v=20260911-prayer" defer></script></body></html>

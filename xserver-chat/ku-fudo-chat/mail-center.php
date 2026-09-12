@@ -1,0 +1,69 @@
+<?php
+declare(strict_types=1);
+require __DIR__.'/bootstrap.php';require __DIR__.'/mail-center-lib.php';
+$u=currentUser();if(!$u||(int)$u['must_change']){header('Location: ./?account=1');exit;}
+mcSchema();$admin=$u['role']==='admin';$board=mcBoard($u);$area=mcGrant($u);$staff=$admin||$board||$area!=='';
+$preferences=isset($_GET['preferences']);$regions=isset($_GET['regions']);$id=max(0,(int)($_GET['id']??0));
+if(!$preferences&&!$staff)fail('担当者のみ利用できます。',403);if($regions&&!$admin)fail('管理者のみ利用できます。',403);
+function mcGo(int $id=0):never {header('Location: mail-center.php'.($id?'?id='.$id:''),true,303);exit;}
+function mcUrl(string $v):string {if($v!==''&&(!filter_var($v,FILTER_VALIDATE_URL)||parse_url($v,PHP_URL_SCHEME)!=='https'||parse_url($v,PHP_URL_USER)!==null||parse_url($v,PHP_URL_PASS)!==null))fail('リンクはhttps://から始めてください。');return $v;}
+function mcDate(string $s,string $f):string {$d=DateTimeImmutable::createFromFormat('!'.$f,$s);if(!$d||$d->format($f)!==$s)fail('日付・時刻を確認してください。');return $s;}
+if($_SERVER['REQUEST_METHOD']==='POST'){
+ if(!is_string($_POST['csrf']??null)||!hash_equals($_SESSION['csrf'],$_POST['csrf']))fail('画面を開き直してください。',403);
+ $action=value($_POST,'action',20,true);
+ if($action==='preference'){query('INSERT INTO mail_preferences(user_id,enabled) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET enabled=excluded.enabled',[$u['id'],isset($_POST['enabled'])?1:0]);header('Location: ?preferences=1&saved=1',true,303);exit;}
+ if(!$staff)fail('担当者のみ利用できます。',403);
+ if($action==='region'){
+  requireAdmin($u);$uid=(int)($_POST['user_id']??0);$ar=value($_POST,'area',60,true);if(!query('SELECT 1 FROM users WHERE id=? AND active=1 AND deleted_at=0',[$uid])->fetchColumn())fail('会員をご確認ください。');
+  if(isset($_POST['remove']))query('DELETE FROM mail_regions WHERE user_id=? AND area=?',[$uid,$ar]);else query('INSERT OR IGNORE INTO mail_regions(user_id,area) VALUES(?,?)',[$uid,$ar]);audit((int)$u['id'],'mail_region',$uid);header('Location: ?regions=1&q='.rawurlencode(value($_POST,'q',60)),true,303);exit;
+ }
+ if($action==='create'){
+  if(!is_string($_POST['nonce']??null)||!hash_equals($_SESSION['mc_nonce']??'',$_POST['nonce'])||empty($_SESSION['mc_nonce']))fail('保存済みか確認して、画面を開き直してください。',409);
+  $kind=value($_POST,'kind',20,true);$aud=value($_POST,'audience',20,true);$ar=value($_POST,'area',60);$month=value($_POST,'month',7);$sid=null;$rev=0;
+  if($kind==='minutes'){
+   if(!$board)fail('理事・理事候補のみ利用できます。',403);$sid=(int)($_POST['source_id']??0);$m=query('SELECT * FROM meeting_minutes WHERE id=?',[$sid])->fetch();if(!$m||trim($m['body'])==='')fail('議事録の内容を先に保存してください。');$aud='board';$ar='';$month='';$title=$m['title'];$body='開催日：'.$m['meeting_on']."\n\n".$m['body'];$at='';$url=$m['resource_url'];$rev=(int)$m['revision'];
+  }else{
+   if(!in_array($kind,['notice','prayer'],true))fail('種類を確認してください。');
+   if($kind==='prayer'){$aud='prayer';$month=mcDate($month,'Y-m');$ar='';if(!$admin)fail('管理者のみ操作できます。',403);}
+   elseif(!in_array($aud,['all','board','region'],true))fail('対象を確認してください。');
+   if($aud==='region'&&$ar==='')fail('地区を選んでください。');if($aud!=='region')$ar='';
+   $title=value($_POST,'title',120,true);$body=value($_POST,'body',3000,true);$at=value($_POST,'event_at',16);if($at!=='')$at=mcDate($at,'Y-m-d\TH:i');$url=mcUrl(value($_POST,'link',1500));
+  }
+  $b=['author_id'=>$u['id'],'kind'=>$kind,'audience'=>$aud,'area'=>$ar];if(!mcCan($u,$b))fail('この送信先への配信権限がありません。',403);
+  query('INSERT OR IGNORE INTO mail_bulletins(author_id,kind,audience,area,month,title,body,event_at,link,source_id,source_revision,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',[$u['id'],$kind,$aud,$ar,$month,$title,$body,$at,$url,$sid,$rev,time()]);
+  $bid=$sid?(int)query('SELECT id FROM mail_bulletins WHERE kind=? AND source_id=? AND source_revision=?',[$kind,$sid,$rev])->fetchColumn():(int)$db->lastInsertId();unset($_SESSION['mc_nonce']);mcGo($bid);
+ }
+ $id=max(0,(int)($_POST['id']??0));$b=query('SELECT * FROM mail_bulletins WHERE id=?',[$id])->fetch();if(!$b||!mcCan($u,$b))fail('配信の権限をご確認ください。',403);
+ if($action==='send'){
+  mcRoot();$db->beginTransaction();query('UPDATE mail_bulletins SET id=id WHERE id=?',[$id]);$u=requireUser();$b=query('SELECT * FROM mail_bulletins WHERE id=?',[$id])->fetch();if(!mcCan($u,$b)||(int)$u['must_change']){$db->rollBack();fail('権限が変更されています。',403);}
+  if($b['state']!=='draft'){$db->commit();mcGo($id);}
+  $recipients=mcRecipients($b);$hash=hash('sha256',json_encode($recipients));if(!$recipients||!hash_equals($hash,(string)($_POST['recipients_hash']??''))||!mcLive($b,true)){$db->rollBack();fail('内容または送信先が変わりました。確認画面を開き直してください。',409);}
+  if($b['kind']==='minutes'){query('UPDATE meeting_minutes SET published=1 WHERE id=? AND revision=?',[$b['source_id'],$b['source_revision']]);}
+  elseif($b['kind']==='notice'){query("INSERT INTO messages(room,user_id,body,kind,title,area,event_at,zoom_url,created_at) VALUES(?,?,?,'notice',?,?,?,?,?)",[$b['audience']==='board'?'board':'all',$u['id'],$b['body'],$b['title'],$b['area'],$b['event_at'],$b['link'],time()]);query('UPDATE mail_bulletins SET message_id=? WHERE id=?',[$db->lastInsertId(),$id]);}
+  query("UPDATE mail_bulletins SET state='published' WHERE id=?",[$id]);foreach($recipients as $r)query('INSERT OR IGNORE INTO mail_outbox(bulletin_id,user_id,recipient) VALUES(?,?,?)',[$id,$r['id'],$r['email']]);audit((int)$u['id'],'bulletin_publish',$id);$db->commit();mcBatch($id,$u);mcGo($id);
+ }
+ if($action==='batch'){mcBatch($id,$u);mcGo($id);}
+ if($action==='retry'){query("UPDATE mail_outbox SET status='pending' WHERE bulletin_id=? AND status='failed'",[$id]);audit((int)$u['id'],'bulletin_retry',$id);mcBatch($id,$u);mcGo($id);}
+ if($action==='cancel'){query("UPDATE mail_outbox SET status='skipped' WHERE bulletin_id=? AND status='pending'",[$id]);mcGo($id);}
+ fail('操作をご確認ください。');
+}
+$e=fn($s)=>htmlspecialchars((string)$s,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
+$labels=['all'=>'無料会員を含む全体','board'=>'理事・理事候補・管理者','region'=>'地区の会員','prayer'=>'祈りの蓄積の参加者'];
+header('Content-Type: text/html; charset=utf-8');header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+?>
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>メールでお知らせ｜じねんネットワーク</title><link rel="stylesheet" href="operations.css"></head><body><header><a href="./">じねんネットワーク</a><span>メールでお知らせ</span></header><nav><a href="./">チャットへ戻る</a><?php if($staff):?><a href="mail-center.php">作成・配信履歴</a><?php endif;?><?php if($admin):?><a href="?regions=1">会員の地区設定</a><a href="redo.php">REDO MAILの発行</a><?php endif;?><a href="?preferences=1">受信設定</a></nav><main><p id="mail-progress" role="status" hidden></p>
+<?php if($preferences):$enabled=query('SELECT enabled FROM mail_preferences WHERE user_id=?',[$u['id']])->fetchColumn();?>
+<h1>お知らせメールの受信設定</h1><?php if(isset($_GET['saved'])):?><p>保存しました。</p><?php endif;?><form method="post"><input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>"><input type="hidden" name="action" value="preference"><label><input type="checkbox" name="enabled" <?= $enabled===false||(int)$enabled===1?'checked':'' ?>>Zoom・議事録・祈りの入力案内をメールでも受け取る</label><button>保存する</button></form><p>配信停止後もサイトで確認できます。REDO MAILの受信設定はREDO MAIL画面で変更できます。祈りの提出控えや登録承認メールは、この設定の対象外です。</p>
+<?php elseif($regions):$q=value($_GET,'q',60);$after=max(0,(int)($_GET['after']??0));$members=query("SELECT id,name FROM users WHERE active=1 AND deleted_at=0 AND id>? AND (?='' OR instr(name,?)>0) ORDER BY id LIMIT 51",[$after,$q,$q])->fetchAll();?>
+<h1>会員の地区設定</h1><p>地区別メールの送信先を設定します。複数地区への所属も可能です。担当者の地区名と同じ表記を使ってください。</p><form><input type="hidden" name="regions" value="1"><label>名前で検索<input name="q" value="<?= $e($q) ?>"></label><button>検索</button></form>
+<?php foreach(array_slice($members,0,50) as $m):?><section class="card"><h2><?= $e($m['name']) ?></h2><?php $ars=query('SELECT area FROM mail_regions WHERE user_id=?',[$m['id']])->fetchAll(PDO::FETCH_COLUMN);?><p>登録済み：<?= $e(implode('、',$ars)) ?></p><form method="post"><input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>"><input type="hidden" name="action" value="region"><input type="hidden" name="user_id" value="<?= (int)$m['id'] ?>"><input type="hidden" name="q" value="<?= $e($q) ?>"><label>地区名<input name="area" required maxlength="60"></label><button>地区を追加</button><button name="remove" value="1" class="secondary">この地区から外す</button></form></section><?php endforeach;?><?php if(count($members)>50):?><a href="?regions=1&amp;after=<?= (int)$members[49]['id'] ?>&amp;q=<?= rawurlencode($q) ?>">次の50人</a><?php endif;?>
+<?php elseif($id):$b=query('SELECT * FROM mail_bulletins WHERE id=?',[$id])->fetch();if(!$b||!mcCan($u,$b))fail('この配信は確認できません。',403);$rs=mcRecipients($b);?>
+<h1><?= $b['state']==='draft'?'メールの確認':'配信結果' ?></h1><article class="card"><h2><?= $e($b['title']) ?></h2><p>送信対象：<?= $e($labels[$b['audience']].($b['area']?' ／ '.$b['area']:'')) ?></p><div class="body-text"><?= $e(mcText($b)) ?></div></article>
+<?php if($b['state']==='draft'):?><p>送信予定：<?= count($rs) ?>人（受信を希望する有効な対象会員）</p><details><summary>対象者のお名前を確認</summary><p><?= $e(implode('、',array_column($rs,'name'))) ?></p></details><p><?= $b['kind']==='minutes'?'議事録は理事・理事候補・管理者に公開します。':($b['kind']==='prayer'?'案内は祈りの蓄積の参加者ページにも掲載します。':($b['audience']==='board'?'理事＆理事候補チャットに公開します。':'サイトでは全体チャットに公開します。地区指定はメールの送信先です。')) ?></p><p>メール本文に上記内容を載せ、一人ずつ送ります。登録メールアドレスは他の会員には表示しません。</p><form method="post"><input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>"><input type="hidden" name="id" value="<?= $id ?>"><input type="hidden" name="recipients_hash" value="<?= $e(hash('sha256',json_encode($rs))) ?>"><button name="action" value="send" <?= !$rs?'disabled':'' ?>>公開してメール送信</button></form><p><a href="mail-center.php">送信せずに戻る</a></p>
+<?php else:$counts=[];foreach(query('SELECT status,COUNT(*) n FROM mail_outbox WHERE bulletin_id=? GROUP BY status',[$id])->fetchAll() as $c)$counts[$c['status']]=(int)$c['n'];$names=['sent'=>'送信処理完了','pending'=>'送信待ち','failed'=>'送信失敗','sending'=>'結果未確定','skipped'=>'対象外・停止'];?><section class="card"><h2>送信状況</h2><p>10件ずつ順に送ります。処理中はこの画面を開いたままにしてください。閉じた場合も配信履歴から再開できます。</p><?php foreach($names as $s=>$label):?><p><?= $label ?>：<?= $counts[$s]??0 ?>件</p><?php endforeach;?><p>送信処理完了はサーバーが受け付けた状態です。受信箱への到着保証ではありません。結果未確定は重複送信を防ぐため自動で再送しません。</p><form method="post"><input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>"><input type="hidden" name="id" value="<?= $id ?>"><?php if($counts['pending']??0):?><button name="action" value="batch">残りのメールを送信する</button><button class="secondary" name="action" value="cancel">未送信分を停止</button><?php endif;?><?php if($counts['failed']??0):?><button class="secondary" name="action" value="retry">失敗分だけ再送する</button><?php endif;?></form><details><summary>個別の送信結果</summary><?php $offset=max(0,(int)($_GET['offset']??0));foreach(query('SELECT u.name,o.status FROM mail_outbox o JOIN users u ON u.id=o.user_id WHERE bulletin_id=? ORDER BY o.id LIMIT 100 OFFSET ?',[$id,$offset])->fetchAll() as $d):?><p><?= $e($d['name'].'：'.$names[$d['status']]) ?></p><?php endforeach;?><a href="?id=<?= $id ?>&amp;offset=<?= $offset+100 ?>">次の100件</a></details></section><?php endif;?>
+<?php else:$_SESSION['mc_nonce']=bin2hex(random_bytes(24));$mid=max(0,(int)($_GET['minutes']??0));?>
+<h1>メールでお知らせする</h1><p>内容を確認してから、サイト公開とメール配信を行います。下書き保存では送信しません。</p>
+<?php if($mid):if(!$board)fail('権限がありません。',403);?><form method="post"><input type="hidden" name="action" value="create"><input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>"><input type="hidden" name="nonce" value="<?= $e($_SESSION['mc_nonce']) ?>"><input type="hidden" name="kind" value="minutes"><input type="hidden" name="audience" value="board"><input type="hidden" name="source_id" value="<?= $mid ?>"><p>保存した議事録の内容からメールを準備します。</p><button>議事録メールの確認へ</button></form>
+<?php else:?><form class="card" method="post"><input type="hidden" name="action" value="create"><input type="hidden" name="csrf" value="<?= $e($_SESSION['csrf']) ?>"><input type="hidden" name="nonce" value="<?= $e($_SESSION['mc_nonce']) ?>"><label>種類<select name="kind"><option value="notice">Zoom予定・月例会・お知らせ</option><?php if($admin):?><option value="prayer">祈りの蓄積・入力案内</option><?php endif;?></select></label><label>メールを送る相手<select name="audience"><?php if($admin):?><option value="all">無料会員を含む全体</option><?php endif;?><?php if($board):?><option value="board">理事・理事候補・管理者</option><?php endif;?><?php if($admin||$area!==''):?><option value="region">地区の会員</option><?php endif;?></select></label><label>地区（地区宛ての場合）<input name="area" maxlength="60" value="<?= $e($area) ?>" <?= !$admin?'readonly':'' ?>></label><?php if($admin):?><label>祈りの対象月（入力案内の場合）<input type="month" name="month" value="<?= date('Y-m',strtotime('first day of last month')) ?>"></label><p>祈りの入力案内を選ぶと、上の宛先設定にかかわらず対象月の参加者だけに送ります。</p><?php endif;?><label>件名・会議名<input name="title" maxlength="120" required></label><label>本文<textarea name="body" rows="8" maxlength="3000" required></textarea></label><label>開催日時（任意・日本時間）<input name="event_at" type="datetime-local"></label><label>Zoom参加・資料リンク（任意）<input name="link" type="url" maxlength="1500" placeholder="https://"></label><button>下書き保存して確認する</button></form><?php endif;?>
+<h2>下書き・配信履歴</h2><?php $before=max(0,(int)($_GET['before']??0));$bs=query('SELECT * FROM mail_bulletins WHERE (?=0 OR id<?) ORDER BY id DESC LIMIT 50',[$before,$before])->fetchAll();foreach($bs as $b):if(!mcCan($u,$b))continue;?><p><a href="?id=<?= (int)$b['id'] ?>"><?= $e($b['title']) ?></a> ／ <?= $b['state']==='draft'?'下書き':'公開・配信状況' ?></p><?php endforeach;?><?php if(count($bs)===50):?><a href="?before=<?= (int)$bs[49]['id'] ?>">以前の50件</a><?php endif;?>
+<?php endif;?></main><script src="mail-center.js" defer></script></body></html>
