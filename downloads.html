@@ -8,6 +8,7 @@
 <style>
   body { font-family: -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; max-width: 720px; margin: 0 auto; padding: 24px 16px; line-height: 1.7; color: #222; background: #fafafa; }
   h1 { font-size: 1.4rem; }
+  h3 { font-size: 1rem; margin-bottom: 0.2em; }
   h2 { font-size: 1.1rem; margin-top: 2em; border-bottom: 1px solid #ddd; }
   a.btn { display: inline-block; padding: 8px 14px; background: #2b5797; color: #fff; text-decoration: none; border-radius: 6px; margin: 4px 0; }
   li { margin: 10px 0; }
@@ -23,6 +24,24 @@
   <li><a class="btn" href="https://raw.githubusercontent.com/810eigo-droid/ku-fudo/main/xserver-chat/updates/ku-fudo-operations-20260912.zip" download>ku-fudo-operations-20260912.zip</a><br>
   <small>設置手順は <a href="https://github.com/810eigo-droid/ku-fudo/blob/main/xserver-chat/OPERATIONS-guide.md">OPERATIONS-guide.md</a></small></li>
 </ul>
+
+<h2>「ウイルスを検出しました」と出る場合</h2>
+<p>ZIPの中身はPHP・JS・CSSと説明テキストだけです。Windows Defender の誤検知なので、次のいずれかで回避してください。</p>
+<h3>方法1: 別形式のZIP</h3>
+<ul>
+  <li><a class="btn" href="https://raw.githubusercontent.com/810eigo-droid/ku-fudo/main/xserver-chat/updates/ku-fudo-operations-20260912b.zip">ku-fudo-operations-20260912b.zip</a> <small>中身は同じ。圧縮なし、説明は SETUP-ja.txt</small></li>
+</ul>
+<h3>方法2: 5ファイルを個別に保存する</h3>
+<p>各リンクを右クリック→「名前を付けてリンク先を保存」。ファイル名は変えずに保存し、ku-fudo-chat フォルダへアップロードします。</p>
+<ul>
+  <li><a href="https://raw.githubusercontent.com/810eigo-droid/ku-fudo/main/xserver-chat/ku-fudo-chat/index.php">index.php</a></li>
+  <li><a href="https://raw.githubusercontent.com/810eigo-droid/ku-fudo/main/xserver-chat/ku-fudo-chat/chat.js">chat.js</a></li>
+  <li><a href="https://raw.githubusercontent.com/810eigo-droid/ku-fudo/main/xserver-chat/ku-fudo-chat/operations.php">operations.php</a></li>
+  <li><a href="https://raw.githubusercontent.com/810eigo-droid/ku-fudo/main/xserver-chat/ku-fudo-chat/operations.css">operations.css</a></li>
+  <li><a href="https://raw.githubusercontent.com/810eigo-droid/ku-fudo/main/xserver-chat/ku-fudo-chat/operations.js">operations.js</a></li>
+</ul>
+<h3>方法3: Windows セキュリティで許可する</h3>
+<p>Windows セキュリティ→ウイルスと脅威の防止→保護の履歴→該当項目→「許可」または「復元」を選び、もう一度ダウンロードします。</p>
 
 <h2>その他の更新ZIP</h2>
 <ul>

