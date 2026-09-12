@@ -1,0 +1,33 @@
+import fs from 'node:fs';import os from 'node:os';import path from 'node:path';import assert from 'node:assert/strict';import {pathToFileURL,fileURLToPath} from 'node:url';
+const source=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../ku-fudo-chat');const modules=process.argv[2];if(!modules)throw Error('Pass the PHP WASM node_modules path');
+const {PHP}=await import(pathToFileURL(modules+'/@php-wasm/universal/index.js'));const {loadNodeRuntime,createNodeFsMountHandler}=await import(pathToFileURL(modules+'/@php-wasm/node/index.js'));
+const php=new PHP(await loadNodeRuntime('8.3',{emscriptenOptions:{processId:process.pid}}));const temp=fs.mkdtempSync(path.join(os.tmpdir(),'learning-test-'));const web=temp+'/public_html',app=web+'/ku-fudo-chat';fs.mkdirSync(web);fs.cpSync(source,app,{recursive:true});if(process.env.LEARNING_TEST_BOOTSTRAP)fs.copyFileSync(process.env.LEARNING_TEST_BOOTSTRAP,app+'/bootstrap.php');fs.mkdirSync(temp+'/ku-fudo-private');fs.writeFileSync(temp+'/ku-fudo-private/config.php',"<?php return []; ");
+fs.writeFileSync(app+'/seed.php',`<?php require __DIR__.'/bootstrap.php'; $id=(int)$_GET['id']; query("INSERT OR IGNORE INTO users(id,login,name,password,role,created_at) VALUES(?,?,?,'unused','member',0)",[$id,'test'.$id.'@example.com','テスト'.$id]);if($id===3){query("UPDATE users SET role='admin' WHERE id=?",[$id]);}if($id===4){query("UPDATE users SET role='candidate' WHERE id=?",[$id]);}if($id===5){query("UPDATE users SET role='director' WHERE id=?",[$id]);}$u=query('SELECT * FROM users WHERE id=?',[$id])->fetch();signIn($u);output(['csrf'=>$_SESSION['csrf']]);`);
+fs.writeFileSync(app+'/inspect-search.php',`<?php require __DIR__.'/bootstrap.php';if(isset($_GET['sql']))$db->exec($_GET['sql']); output(['users'=>query('SELECT id,name,login,role,active FROM users')->fetchAll(),'messages'=>query('SELECT * FROM messages')->fetchAll()]);`);await php.mount(temp,createNodeFsMountHandler(temp));const jars={};
+async function run(who,file='learning.php',post=null){const jar=jars[who]??={cookie:''};let r=await php.run({scriptPath:app+'/'+file.split('?')[0],relativeUri:'/ku-fudo-chat/'+file,protocol:'https',method:post?'POST':'GET',headers:{Host:'test.invalid',Cookie:jar.cookie,...(post?{'Content-Type':'application/x-www-form-urlencoded'}:{})},body:post?new TextEncoder().encode(new URLSearchParams(post).toString()):undefined,$_SERVER:{HTTPS:'on',DOCUMENT_ROOT:web,REMOTE_ADDR:'192.0.2.1'}});for(const c of r.headers['set-cookie']??[])if(c.startsWith('KU_FUDO_CHAT='))jar.cookie=c.split(';')[0];return r;}
+
+async function inspect(sql=''){return JSON.parse((await run(3,'inspect-search.php'+(sql?'?sql='+encodeURIComponent(sql):''))).text);}
+try{
+for(const id of [1,2,3,4,5]){let r=await run(id,'seed.php?id='+id);jars[id].csrf=JSON.parse(r.text).csrf;}
+let r=await run('anon','admin-search.php');assert.equal(r.httpStatusCode,401);
+for(const id of [1,4,5]){r=await run(id,'admin-search.php');assert.equal(r.httpStatusCode,403);}
+r=await run(3,'admin-search.php',{});assert.equal(r.httpStatusCode,405);
+r=await run(3,'admin-search.php?tab=minutes');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(r.text.includes('まだありません'));
+await run(3,'operations.php');await run(3,'learning.php');await run(3,'mail-center.php');
+await inspect("UPDATE users SET name='検証 <script>bad</script>' WHERE id=1; INSERT INTO mail_regions(user_id,area) VALUES(1,'福岡'); INSERT INTO learning_notes(user_id,lesson_id,watched,note,updated_at) VALUES(1,'yUsA5PHWJeg',1,'PRIVATE NOTE MUST NOT APPEAR',0); INSERT INTO prayer_members(user_id,number,start_month,end_month,enabled) VALUES(1,1,'2026-08','',1),(2,2,'2026-08','',1); INSERT INTO prayer_reports(user_id,month,number,name,email,humanity,vision,return_point,other_prayer,gratitude,meditation,listening,updated_at) VALUES(1,'2026-08',1,'検証','test1@example.com',0,0,0,0,0,0,0,0); INSERT INTO messages(room,user_id,body,kind,title,event_at,created_at) VALUES('all',3,'検索対象の本文','notice','Zoom検証','2026-09-20T13:00',0); INSERT INTO meeting_minutes(title,meeting_on,body,author_id,updated_by,updated_at) VALUES('月例会検証','2026-08-23','限定検索本文',3,3,0); INSERT INTO redo_issues(number,issued_on,title,body,created_at,updated_at) VALUES('614','2026-08-10','REDO検証','テスト',0,0); INSERT INTO mail_bulletins(author_id,kind,audience,title,body,created_at) VALUES(3,'notice','all','配信検証','テスト',0)");
+const before=await inspect();
+r=await run(3,'admin-search.php?q=test1@');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(r.text.includes('1件'));assert(r.text.includes('&lt;script&gt;'));
+r=await run(3,'admin-search.php?area=福岡');assert(r.text.includes('1件'));r=await run(3,'admin-search.php?role=director');assert(r.text.includes('1件'));
+r=await run(3,'admin-search.php?member=1');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(!r.text.includes('PRIVATE NOTE'));assert(r.text.includes('視聴済み'));assert(r.text.includes('2026-08'));
+r=await run(3,'admin-search.php?tab=events&q=検索対象&from=2026-09-01&to=2026-09-30');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(r.text.includes('Zoom検証'));
+r=await run(3,'admin-search.php?tab=minutes&q=限定検索');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(r.text.includes('月例会検証'));
+r=await run(3,'admin-search.php?tab=redo&q=614');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(r.text.includes('REDO検証'));
+r=await run(3,'admin-search.php?tab=prayer&month=2026-08&submitted=no');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(r.text.includes('テスト2'));assert(r.text.includes('1件'));
+r=await run(3,'admin-search.php?tab=mail&q=配信検証');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(r.text.includes('1件'));
+r=await run(3,'admin-search.php?from=2026-02-31');assert.equal(r.httpStatusCode,400);r=await run(3,'admin-search.php?role=invalid');assert.equal(r.httpStatusCode,400);
+r=await run(3,'admin-search.php?q='+encodeURIComponent("' OR 1=1 --"));assert.equal(r.httpStatusCode,200);assert(r.text.includes('0件'));
+assert.deepEqual(await inspect(),before);
+for(let i=6;i<=37;i++)await inspect(`INSERT INTO users(id,login,name,password,role,created_at) VALUES(${i},'extra${i}@example.com','追加${i}','unused','member',0)`);
+r=await run(3,'admin-search.php');assert(r.text.includes('次の30件'));r=await run(3,'admin-search.php?page=2');assert(r.text.includes('前の30件'));
+console.log('PASS: admin-only, read-only, missing-module handling, all six searches, member details without private notes, role/region/date/submission filters, escaping, literal SQL input and pagination.');
+}finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}
