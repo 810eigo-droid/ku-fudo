@@ -6,6 +6,7 @@ WordPressを使わない静的HTMLのデモです。レッスン名・説明・�
 
 **実際に投稿を共有する「全体」「理事＆理事候補」の2つのチャットは、[xserver-chat](xserver-chat/README.md) にあります。**
 PHP＋SQLiteの別アプリです。GitHub Pagesでは実行できません。設置・権限確認を行ってから会員を招待してください。
+更新ZIPの直接ダウンロードリンクは [DOWNLOAD.md](DOWNLOAD.md) にまとめています。
 以下は従来のカリキュラム画面サンプルの説明です。
 
 ## 内容

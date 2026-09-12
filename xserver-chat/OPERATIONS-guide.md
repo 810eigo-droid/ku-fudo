@@ -1,5 +1,9 @@
 # 議事録・地区のお知らせ（2026年9月12日）
 
+## ZIPの入手
+https://raw.githubusercontent.com/810eigo-droid/ku-fudo/main/xserver-chat/updates/ku-fudo-operations-20260912.zip
+上のリンクを開くと ku-fudo-operations-20260912.zip がダウンロードされます。GitHubの画面でZIPが落とせない場合はこちらを使ってください。他のZIPは [DOWNLOAD.md](../DOWNLOAD.md) にまとめています。
+
 ## 設置
 1. このZIPをPCで展開します。
 2. サーバーの taf-design.com/public_html/ku-fudo-chat 内の index.php と chat.js をPCへダウンロードしてバックアップしてください。
