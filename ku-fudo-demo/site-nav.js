@@ -10,7 +10,7 @@ const menu=document.createElement('details');menu.className='sn-menu';
 const summary=document.createElement('summary');summary.textContent='☰ メニュー';summary.setAttribute('aria-controls','sn-panel');menu.append(summary);
 const panel=document.createElement('div');panel.id='sn-panel';panel.className='sn-panel';
 const mainNav=document.createElement('nav');mainNav.setAttribute('aria-label','サイトメニュー');mainNav.className='sn-links';
-const links=[['ku-fudo-demo/','トップページ'],['ku-fudo-demo/meditation.html','瞑想の会'],['ku-fudo-chat/mypage.php','マイページ'],['ku-fudo-chat/','チャット'],['ku-fudo-chat/?room=all#zoom-schedule','Zoom会議の予定'],['ku-fudo-demo/#curriculum','カリキュラム'],['ku-fudo-chat/redo.php','REDO MAIL'],['ku-fudo-chat/prayer.php','祈りの蓄積'],['ku-fudo-chat/?account=1#account','アカウント']];
+const links=[['ku-fudo-demo/','トップページ'],['ku-fudo-demo/meditation.html','瞑想の会'],['ku-fudo-chat/mypage.php','マイページ'],['ku-fudo-chat/','チャット'],['ku-fudo-chat/?room=all#zoom-schedule','Zoom会議の予定'],['ku-fudo-demo/#curriculum','カリキュラム'],['ku-fudo-smartoon/','漫画空不動の歩み'],['ku-fudo-chat/redo.php','REDO MAIL'],['ku-fudo-chat/prayer.php','祈りの蓄積'],['ku-fudo-chat/?account=1#account','アカウント']];
 for(const [p,t] of links){const a=document.createElement('a');a.href=url(p);a.textContent=t;mainNav.append(a);}
 panel.append(mainNav);const extras=document.createElement('nav');extras.className='sn-links sn-extras';extras.setAttribute('aria-label','このページのメニュー');panel.append(extras);
 const close=document.createElement('button');close.type='button';close.className='sn-close';close.textContent='メニューを閉じる';close.addEventListener('click',()=>{menu.open=false;summary.focus();});panel.append(close);menu.append(panel);bar.append(menu);document.body.prepend(bar);
