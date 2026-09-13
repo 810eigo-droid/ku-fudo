@@ -36,10 +36,10 @@ header("Content-Security-Policy: default-src 'self'; script-src 'none'; style-sr
 ?>
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学びのマイページ｜じねんネットワーク</title><link rel="stylesheet" href="learning.css"></head><body>
 <header><a href="../ku-fudo-demo/">じねんネットワーク<span>会員サイト</span></a></header>
-<nav aria-label="メニュー"><a href="../ku-fudo-demo/">トップへ戻る</a><a href="./">チャット</a><a href="./?account=1">アカウント</a></nav><main>
+<nav aria-label="メニュー"><a href="../ku-fudo-demo/">トップへ戻る</a><a href="./">チャット</a><a href="mypage.php">マイページ</a><a href="./?account=1">アカウント</a></nav><main>
 <h1>学びのマイページ</h1>
 <?php if (!$ready): ?>
-<section class="card"><h2>ログインして記録を開く</h2><p>登録したメールアドレスとパスワードでログインしてください。初回パスワード変更の案内が出た場合は、変更を済ませてください。</p><a class="primary" href="./?account=1">ログイン画面を開く</a><p>ログイン後、ブラウザーの「戻る」でこの画面へ戻り、下のボタンを押してください。</p><a class="secondary" href="learning.php">マイページを開く</a></section>
+<section class="card"><h2>ログインして記録を開く</h2><p>登録したメールアドレスとパスワードでログインしてください。初回パスワード変更の案内が出た場合は、変更を済ませてください。</p><a class="primary" href="./?account=1&next=learning.php">ログイン画面を開く</a><p>ログイン後、このページが開きます。</p><a class="secondary" href="learning.php">マイページを開く</a></section>
 <?php else: ?>
 <p><?= $escape($u['name']) ?>さんの記録です。メモはチャットに公開されません。</p>
 <p class="learning-disclosure">コースのご案内のため、管理者が視聴状況を確認します。自分のメモは管理画面には表示されません。</p>

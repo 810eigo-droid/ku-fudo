@@ -33,6 +33,7 @@ async function start(){
  fetch('operations.php?access=1',{credentials:'same-origin',cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(p=>{if(user&&!Number(user.must_change)){$('minutes-link').hidden=!p.board;$('district-notice-link').hidden=!p.notice;}}).catch(()=>{});
  $('board-button').hidden=user.role==='member';$('kind-label').hidden=user.role!=='admin';
  if(required){status('初回パスワードを変更してください。');return;}
+ const nextPage=new URLSearchParams(location.search).get('next');if(['mypage.php','admin.php','learning.php','admin-search.php'].includes(nextPage)){location.replace(nextPage);return;}
  if(new URLSearchParams(location.search).has('prayer')){const month=new URLSearchParams(location.search).get('month')||'';location.replace('prayer.php'+(/^20\d{2}-(0[1-9]|1[0-2])$/.test(month)?'?month='+month:''));return;}
  if(new URLSearchParams(location.search).has('redo')){const redoId=Number(new URLSearchParams(location.search).get('redo'));location.replace('redo.php'+(Number.isSafeInteger(redoId)&&redoId>0?'?id='+redoId:''));return;}
  if(user.role!=='admin'&&Number(user.chat_access)===0&&new URLSearchParams(location.search).get('account')!=='1'){location.replace('redo.php');return;}

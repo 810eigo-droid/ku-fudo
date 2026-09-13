@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
-$u=requireUser();requireAdmin($u);if((int)$u['must_change'])fail('初回パスワードを変更してください。',403);
+$u=currentUser();if(!$u){header('Location: ./?account=1&next=admin-search.php',true,302);exit;}requireAdmin($u);if((int)$u['must_change'])fail('初回パスワードを変更してください。',403);
 if(($_SERVER['REQUEST_METHOD']??'GET')!=='GET')fail('この画面は検索・閲覧専用です。',405);
 function asTable(string $name):bool{return (bool)query("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",[$name])->fetchColumn();}
 function asParam(string $key,int $max=80):string{return value($_GET,$key,$max);}
