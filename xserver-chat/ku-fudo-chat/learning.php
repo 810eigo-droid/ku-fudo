@@ -32,9 +32,9 @@ $records=[];
 if ($ready) { foreach(query('SELECT * FROM learning_notes WHERE user_id=?',[$u['id']])->fetchAll() as $row) { $records[$row['lesson_id']]=$row; } }
 $count=0;foreach($lessons as $lesson) { $count+=(int)($records[$lesson['id']]['watched'] ?? 0); }
 header('Content-Type: text/html; charset=utf-8');
-header("Content-Security-Policy: default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
+header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
 ?>
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学びのマイページ｜じねんネットワーク</title><link rel="stylesheet" href="learning.css"></head><body>
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>学びのマイページ｜じねんネットワーク</title><link rel="stylesheet" href="learning.css"><link rel="stylesheet" href="site-nav.css?v=20260913-menu"></head><body>
 <header><a href="../ku-fudo-demo/">じねんネットワーク<span>会員サイト</span></a></header>
 <nav aria-label="メニュー"><a href="../ku-fudo-demo/">トップへ戻る</a><a href="./">チャット</a><a href="mypage.php">マイページ</a><a href="./?account=1">アカウント</a></nav><main>
 <h1>学びのマイページ</h1>
@@ -58,4 +58,4 @@ header("Content-Security-Policy: default-src 'self'; script-src 'none'; style-sr
 <?php if (($_GET['saved'] ?? '')===$id && !$error): ?><p class="saved" role="status">保存しました。</p><?php endif; ?>
 <?php if (isset($row['updated_at'])): ?><small>最終保存：<?= $escape(date('Y/m/d H:i',(int)$row['updated_at'])) ?></small><?php endif; ?>
 </form></section><?php endforeach; ?>
-<?php endif; ?><p><a href="../ku-fudo-demo/">← トップへ戻る</a></p></main></body></html>
+<?php endif; ?><p><a href="../ku-fudo-demo/">← トップへ戻る</a></p></main><script src="site-nav.js?v=20260913-menu" defer></script></body></html>

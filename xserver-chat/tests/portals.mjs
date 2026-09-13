@@ -19,5 +19,8 @@ r=await run(1,'mypage.php');assert.equal(r.httpStatusCode,200);assert(JSON.strin
 r=await run(1,'admin.php');assert.equal(r.httpStatusCode,403);
 r=await run(3,'admin.php');assert.equal(r.httpStatusCode,200);assert(JSON.stringify(r.headers['content-type']).includes('text/html'));assert(JSON.stringify(r.headers['content-security-policy']).includes("style-src 'self'"));assert(r.text.includes('admin-search.php'));
 r=await run(3,'mypage.php');assert(r.text.includes('href="admin.php"'));
-console.log('PASS portal login redirects and member/admin authorization');
+for(const page of ['admin.php','mypage.php','admin-search.php','learning.php','learning-admin.php','operations.php','mail-center.php','redo.php','prayer.php','password-reset.php','index.php']){
+const res=await run(3,page);assert.equal(res.httpStatusCode,200,page+res.text+res.errors);assert(res.text.includes('site-nav.js'),page);assert(res.text.includes('site-nav.css'),page);assert(JSON.stringify(res.headers['content-security-policy']).includes("script-src 'self'"),page);
+}
+console.log('PASS portal authorization and navigation resources/CSP on 11 PHP pages');
 }finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}
