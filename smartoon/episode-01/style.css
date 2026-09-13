@@ -7,3 +7,5 @@
 
 /* 話の移動 */
 .episode-nav{display:flex;gap:8px;margin-top:20px}.episode-nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 18px;border:1px solid #87949b;border-radius:4px;text-decoration:none;font-size:14px}.episode-nav a[aria-current="page"]{background:#142734;border-color:#142734;color:white}.next-episode{display:flex;width:fit-content;min-height:48px;align-items:center;justify-content:space-between;gap:36px;padding:12px 25px;margin:0 auto 25px;background:#eac477;color:#142734;text-decoration:none;font-size:17px;font-weight:700;border-radius:5px}.next-episode:hover{background:#f4d99f}
+
+.episode-nav{flex-wrap:wrap}
