@@ -3,3 +3,6 @@
 
 /* 年齢表示をなくして長く使える入口にする */
 .smartoon-portraits figure{padding-bottom:0}
+
+/* 最新話への入口とスマホ人物サイズの復元 */
+.smartoon-latest{display:flex;align-items:center;gap:15px;padding:13px 18px;margin-top:8px;border:1px solid #d8c393;border-radius:7px;background:#fffdf8;color:#203448;font-size:14px;min-height:48px}.smartoon-latest>span:first-child{color:#80632c}.smartoon-latest>span:last-child{margin-left:auto}.smartoon-latest:hover{background:#fff3d9}@media(max-width:600px){.smartoon-portraits img{height:133px;object-fit:cover;object-position:center top}.smartoon-latest{gap:9px;padding:12px;font-size:12px;flex-wrap:wrap}}
