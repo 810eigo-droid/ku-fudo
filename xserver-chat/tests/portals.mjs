@@ -15,9 +15,9 @@ try{
 let r=await run('anon','mypage.php');assert.equal(r.httpStatusCode,302);assert(JSON.stringify(r.headers).includes('next=mypage.php'));
 r=await run('anon','admin.php');assert.equal(r.httpStatusCode,302);
 for(const id of [1,3])await run(id,'seed.php?id='+id);
-r=await run(1,'mypage.php');assert.equal(r.httpStatusCode,200);assert(r.text.includes('視聴記録・メモ'));assert(!r.text.includes('href="admin.php"'));
+r=await run(1,'mypage.php');assert.equal(r.httpStatusCode,200);assert(JSON.stringify(r.headers['content-type']).includes('text/html'));assert(JSON.stringify(r.headers['content-security-policy']).includes("style-src 'self'"));assert(r.text.includes('視聴記録・メモ'));assert(!r.text.includes('href="admin.php"'));
 r=await run(1,'admin.php');assert.equal(r.httpStatusCode,403);
-r=await run(3,'admin.php');assert.equal(r.httpStatusCode,200);assert(r.text.includes('admin-search.php'));
+r=await run(3,'admin.php');assert.equal(r.httpStatusCode,200);assert(JSON.stringify(r.headers['content-type']).includes('text/html'));assert(JSON.stringify(r.headers['content-security-policy']).includes("style-src 'self'"));assert(r.text.includes('admin-search.php'));
 r=await run(3,'mypage.php');assert(r.text.includes('href="admin.php"'));
 console.log('PASS portal login redirects and member/admin authorization');
 }finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}

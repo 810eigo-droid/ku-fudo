@@ -1,5 +1,7 @@
 <?php
 declare(strict_types=1);require __DIR__.'/bootstrap.php';
+header('Content-Type: text/html; charset=utf-8');
+header("Content-Security-Policy: default-src 'self'; script-src 'none'; style-src 'self'; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'");
 $u=currentUser();if(!$u||(int)$u['must_change']){header('Location: ./?account=1&next=mypage.php',true,302);exit;}
 
 $e=fn($s)=>htmlspecialchars((string)$s,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8');
