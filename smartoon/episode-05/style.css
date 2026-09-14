@@ -18,7 +18,10 @@
 .episode-four .dialogue{font-size:clamp(17px,4.4vw,25px)}.calligraphy{text-align:center;padding:35px 15px 25px;background:#fffdf8}.calligraphy h2{font-family:"Yu Mincho","Hiragino Mincho ProN",serif;font-size:clamp(42px,12vw,70px);letter-spacing:.12em;line-height:1.6}.calligraphy-label{font-size:12px;color:#677078;letter-spacing:.1em;margin-bottom:15px}.calligraphy-reading{font-size:14px;letter-spacing:.4em;color:#677078;margin-top:6px}.heard-voice{border-radius:9px;border-color:#c5a059}.praise{display:flex;gap:12px;flex-wrap:wrap;padding:25px 6% 35px;font-size:14px;color:#61727c}.praise span{padding:10px 13px;border:1px solid #b5bfc4;border-radius:14px;background:#fff9}.episode-four #panel-7 .narration.after{padding-top:35px;padding-bottom:50px;font-weight:700}
 
 /* 第5話：危機と疑念を静かに描く */
-.episode-five .dialogue{font-size:clamp(17px,4.4vw,25px)}.episode-five .night-panel .narration{color:#f3eadb}.episode-five #panel-3 .narration{font-weight:500}.episode-five #panel-7 .narration.after{padding-top:35px;padding-bottom:50px}
+.episode-five .dialogue{font-size:clamp(17px,4.4vw,25px)}.episode-five .night-panel .narration{color:#f3eadb}.episode-five #panel-3 .narration{font-weight:500}.episode-five #panel-10 .narration.after{padding-top:35px;padding-bottom:50px}
 
 /* 危機に至る経緯を著書へ案内 */
 .episode-five .book-note{margin-top:22px;padding:16px 18px;border-left:3px solid #eac477;background:#ffffff0a;color:#f3eadb;font-size:clamp(15px,3.8vw,18px);font-weight:400;line-height:1.9;letter-spacing:.02em;overflow-wrap:anywhere}
+
+/* 追加原稿：声と内面の語りを読み分ける */
+.episode-five .voice-label{display:block;font-size:12px;line-height:1.6;letter-spacing:.02em;color:#61727c;margin-bottom:10px}.episode-five .voice{border-color:#b39351;border-radius:12px}.episode-five #panel-9 .narration.after{font-size:clamp(17px,4.3vw,24px);line-height:2}
