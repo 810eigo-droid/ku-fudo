@@ -19,3 +19,6 @@
 
 /* 第5話：危機と疑念を静かに描く */
 .episode-five .dialogue{font-size:clamp(17px,4.4vw,25px)}.episode-five .night-panel .narration{color:#f3eadb}.episode-five #panel-3 .narration{font-weight:500}.episode-five #panel-7 .narration.after{padding-top:35px;padding-bottom:50px}
+
+/* 危機に至る経緯を著書へ案内 */
+.episode-five .book-note{margin-top:22px;padding:16px 18px;border-left:3px solid #eac477;background:#ffffff0a;color:#f3eadb;font-size:clamp(15px,3.8vw,18px);font-weight:400;line-height:1.9;letter-spacing:.02em;overflow-wrap:anywhere}
