@@ -1,0 +1,41 @@
+{
+  "mode": "built-in image_gen",
+  "character_reference": "../episode-01/assets/panel-01.webp",
+  "wardrobe": "User supplied actual suit photo: charcoal two-button suit, white shirt, lavender geometric-pattern tie. Tailored natural fit, black leather shoes.",
+  "common": "Use case: illustration-story. Create ONE portrait 3:4 single Japanese smartoon panel. Input1 is mandatory established Ku-fudo character/style reference: same gentle rounded slightly long face, small modest eyes, black rectangular glasses, swept black hair, clean moderately bold black outlines, flat warm skin and minimal shadows. Preserve identity, not a sharp-jawed handsome anime hero. Tall slim 180cm man with long legs, narrow body, no muscular build, no aging change from established character. Input2 is wardrobe reference ONLY: elegant charcoal nearly black TWO-BUTTON SINGLE BREASTED suit, moderate notch lapels, natural shoulders, tailored but not tight waist, matching straight tapered trousers, WHITE dress shirt, LAVENDER PURPLE small geometric pattern tie, black leather lace-up dress shoes. Dignified credible company president, refined good fit, no luxury logos or gold jewelry. People drawn sem flat exactly like input1, detailed warmly lit illustrated backgrounds with depth like prior episodes, no photo people, no glossy skin. NO TEXT, captions, speech bubbles, watermark, logos or panel borders. No multiple-panel collage.",
+  "prompts": [
+    {
+      "panel": 1,
+      "prompt": "Scene1: Full-length three-quarter view Ku-fudo in the specified charcoal suit with purple tie, carrying a simple dark business briefcase, walking down a safe broad garden path toward an ordinary Japanese city seen below. Quiet distant mountains recede BEHIND him, city and daily working life AHEAD. Warm morning sky. Visual story of choosing everyday society rather than mountain seclusion. No monks, no crosses/X symbols. Show both shoes and margin beneath."
+    },
+    {
+      "panel": 2,
+      "prompt": "Scene2: At home near entryway mirror, Ku-fudo standing adjusting his lavender patterned tie with both hands, dressing for work in specified charcoal two-button suit white shirt. Three-quarter waist-up composition, calm determined familiar face, wooden console, clock, plant, organized briefcase. Reflection subtle no duplicate confusing face. Focus on tie and dignified neatly fitted jacket."
+    },
+    {
+      "panel": 3,
+      "prompt": "Scene3: Spacious realistic Japanese company meeting room. Ku-fudo stands at end of wooden conference table in specified suit with purple patterned tie, gently giving clear direction with open hand while listening to three ordinary adult employees men and women. Papers notebooks blank chart and laptops on table, windows and plants, warm daylight. Leader and colleagues respectful, no aggressive pointing. Ku-fudo full body shoes visible to side of table."
+    },
+    {
+      "panel": 4,
+      "prompt": "Scene4: Medium portrait from hips upward of Ku-fudo in exact charcoal suit white shirt lavender patterned tie, arms folded comfortably, gentle confident smile, familiar modest eyes and glasses. Office bookshelves and window softly detailed behind him. Dignified approachable company president, same simple face lines as reference, avoid smugness and heroic anime beautification."
+    },
+    {
+      "panel": 5,
+      "prompt": "Scene5: One continuous warm evening Japanese family dining-room scene. Ku-fudo seated with two ordinary family members represented as generic illustrative supporting characters, sharing a home-cooked meal and listening warmly. He wears same white business shirt and lavender tie loosened slightly; charcoal suit jacket neatly over chair back. Simple ceramic dishes rice soup vegetables, dining lamp, plants, ordinary lived-in home, work briefcase by entry in background. Everyone modestly clothed. Same established sem flat character design. Do not split frame or invent names."
+    },
+    {
+      "panel": 6,
+      "prompt": "Scene6: Ku-fudo in exact charcoal suit purple patterned tie seated at desk reviewing documents with laptop and pen, thoughtful practical focused expression. An employee at the other side of desk exchanges a page. Realistic tidy office, shelves plants soft daylight. Very subtle translucent sky-blue interlocking gear shapes near window as inner metaphor connecting conviction and action; no magical powers, no money symbols, no fabricated performance numbers, no readable charts. People and work primary."
+    },
+    {
+      "panel": 7,
+      "prompt": "Scene7: Closing full-body portrait Ku-fudo walking toward viewer on a sunlit ordinary Japanese office district walkway, one hand open invitingly, gentle confident smile. Exact charcoal two-button suit WHITE shirt LAVENDER small patterned tie BLACK leather dress shoes. Tall slim familiar character. Diverse ordinary working adults in soft background, buildings and street trees. Broad warm blue sky at top, clear welcoming future facing composition. Feet fully visible with generous bottom margin."
+    }
+  ],
+  "revision": {
+    "request": "1コマ目と4コマ目の顔の向きを変更",
+    "panel1": "Rotate only head to screen left, preserve body background clothing and identity. Do not mirror picture.",
+    "panel4": "Rotate only head to near-frontal toward viewer, preserve folded arms background clothing and identity."
+  }
+}
