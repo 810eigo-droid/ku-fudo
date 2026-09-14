@@ -22,7 +22,7 @@
     },
     {
       "panel": 5,
-      "prompt": "Scene5: One continuous warm evening Japanese family dining-room scene. Ku-fudo seated with two ordinary family members represented as generic illustrative supporting characters, sharing a home-cooked meal and listening warmly. He wears same white business shirt and lavender tie loosened slightly; charcoal suit jacket neatly over chair back. Simple ceramic dishes rice soup vegetables, dining lamp, plants, ordinary lived-in home, work briefcase by entry in background. Everyone modestly clothed. Same established sem flat character design. Do not split frame or invent names."
+      "prompt": "Replacement panel 5: Same established slim Ku-fudo in charcoal suit white shirt lavender patterned tie, working alone at an office desk in evening light, reading a sheet and writing in a notebook. Preserve series line art and identity; no family scene, no food, no other people. Detailed warm office, no text or speech bubbles."
     },
     {
       "panel": 6,
@@ -36,6 +36,7 @@
   "revision": {
     "request": "1コマ目と4コマ目の顔の向きを変更",
     "panel1": "Rotate only head to screen left, preserve body background clothing and identity. Do not mirror picture.",
-    "panel4": "Rotate only head to near-frontal toward viewer, preserve folded arms background clothing and identity."
+    "panel4": "Rotate only head to near-frontal toward viewer, preserve folded arms background clothing and identity.",
+    "panel5": "Remove family-life portrayal. Use solitary office work scene, assets/panel-05-work.webp. No new personal-life allegations."
   }
 }

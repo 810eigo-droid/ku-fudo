@@ -1,0 +1,45 @@
+{
+  "mode": "built-in image_gen",
+  "character_reference": "../episode-01/assets/panel-01.webp",
+  "wardrobe": "実際に着用されていたスーツ写真を基準：濃紺、淡い青の細いストライプシャツ、青の小紋ネクタイ、控えめなタイピン、黒い革靴。",
+  "common": "Use case illustration-story. ONE portrait 3:4 single Japanese smartoon panel continuing same series, final episode10. Input1 mandatory face and illustration reference: same gentle modest Japanese man Ku-fudo, small simple eyes, black rectangular glasses, black hair swept sideways in broad masses, gently long rounded face, tall very slim 180cm body, no aging change. Clean moderately bold black contour lines, sem-flat warm skin with minimal shadows, no photorealistic people or glossy skin, no sharp-jawed anime beautification. Input2 wardrobe ONLY from actual suit photograph: elegant DARK NAVY single-breasted two-button suit with moderate notch lapels, light nearly white PALE BLUE fine vertical striped dress shirt, BLUE small geometric pattern tie, subtle small silver tie bar, matching navy trousers and BLACK leather lace-up dress shoes. Natural shoulders tailored non-tight fit, dignified company president. Detailed warm illustrated room/garden backgrounds with depth like established series. No text, captions, speech bubbles, watermarks, logos, multiple panels. Spiritual light is a subjective poetic metaphor, no superhero effects, no deity figure. Keep anatomy normal. Face directions MUST follow each scene, not always right.",
+  "prompts": [
+    {
+      "panel": 1,
+      "prompt": "Panel1 METHOD notes. Ku-fudo seated at a tidy wooden desk LEFT-FACING THREE-QUARTER PROFILE, nose pointing screen LEFT, pen in hand organizing blank notebook sheets and simple abstract diagrams without readable text. Window at screen left with warm daylight, bookshelves and plants. Same navy suit light striped shirt blue patterned tie. Medium-wide desk shot. Thoughtful calm familiar face, eyes lowered slightly left. Do not repeat right-facing portraits."
+    },
+    {
+      "panel": 2,
+      "prompt": "Panel2 HONEST self reflection. Ordinary Japanese adult man with short dark-brown hair, GREY BLUE crewneck sweatshirt and beige trousers stands by a tall mirror on screen LEFT, seeing his own somewhat worried reflection. Ku-fudo on screen RIGHT facing SCREEN LEFT in clear side profile, calmly listens with open relaxed hand, no touching without invitation. Same navy suit blue tie, gentle supportive expression. Detailed counseling/study room, potted plant, wooden furniture. Faint grey smoky shapes within mirror symbolize worries, no demons or words. Single continuous scene."
+    },
+    {
+      "panel": 3,
+      "prompt": "Panel3 LIGHT awareness. The SAME ordinary adult man short dark brown hair grey-blue crewneck sweatshirt beige trousers from previous scene, FRONTAL close-to-medium view, places open hand on his own chest with thoughtful soft relieved face. Ku-fudo small in background screen LEFT in three-quarter BACK view, navy suit blue tie subtly visible if possible, lets the man reflect. Very gentle honey-gold and sky-blue translucent glow around novice chest softly dissolves thin grey mist as INNER metaphor, NOT rays or magic weapon. Real warm room and bookshelf remain visible. Character faces drawn simple sem flat like reference, no dramatic anime."
+    },
+    {
+      "panel": 4,
+      "prompt": "Panel4 GRATITUDE. Ku-fudo in DARK NAVY suit pale blue fine striped shirt BLUE small geometric tie, natural calm RIGHT-FACING SIDE PROFILE near a garden window in soft morning sunlight, eyes gently closed, hands held softly together at chest in quiet gratitude, not an exaggerated religious pose. Waist-up calm composition, natural modest face identical to reference, leafy garden and soft wood trim detailed. No religious icons or halo."
+    },
+    {
+      "panel": 5,
+      "prompt": "Panel5 START AGAIN. Same grey-blue sweatshirt beige-trouser ordinary adult novice from panels2 and3 rising from a simple chair with shoulders relaxed and small honest smile, gaze angled UP toward SCREEN RIGHT. Ku-fudo standing screen RIGHT shown THREE-QUARTER BACK with a little left cheek visible as he listens, same navy suit. Full bodies and normal proportions shoes visible. Sunlit community-room/study window, plants, desk and books. Focus on novice's new ease, encouraging mundane action, not supernatural transformation."
+    },
+    {
+      "panel": 6,
+      "prompt": "Panel6 HUMANITY. Wide portrait single poetic scene: varied ordinary adults and families, older woman, worker, parent and child on a sunlit Japanese riverside green park, small city in distance. Same simple sem-flat character style with richly illustrated trees and real human scale. Upper sky transitions very softly to a broad blue and golden star-like light curve suggesting Earth and humanity embraced in warmth, WITHOUT depicting a literal god, no worship, no magic beams. Ku-fudo may be a small navy-suited figure from rear among people, not central portrait. Hopeful inclusive mood, no text."
+    },
+    {
+      "panel": 7,
+      "prompt": "Panel7 FINALE. Ku-fudo directly FACING VIEWER, natural symmetrical near-frontal face with warm modest smile, reaching ONE open welcoming hand gently toward viewer, other hand relaxed at side. Same DARK NAVY tailored two-button suit, pale-blue fine striped shirt, BLUE small geometric tie with subtle silver tie bar, BLACK dress shoes. Tall slim full-body with feet fully visible and generous bottom margin. On a broad bright garden path with ordinary town and trees behind, open blue sky with gentle golden sunlight. Final emotional closure, calm and welcoming, preserve familiar restrained eye size and face. No text, no title, no end lettering because added in HTML."
+    }
+  ],
+  "direction_plan": [
+    "左下",
+    "左横顔",
+    "先生は後ろ姿・読者役は正面",
+    "右横顔",
+    "先生は後ろ姿・読者役が右上を見る",
+    "人物群の引き",
+    "正面"
+  ]
+}
