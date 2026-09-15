@@ -6,11 +6,12 @@ localNavs.forEach(n=>n.classList.add('sn-local-nav'));
 for(const n of localNavs){const aside=n.closest('aside');if(aside)aside.classList.add('sn-local-aside');}
 const bar=document.createElement('div');bar.className='sn-bar';
 const home=document.createElement('a');home.className='sn-home';home.href=url('ku-fudo-demo/');home.textContent='トップへ';bar.append(home);
+const mypage=document.createElement('a');mypage.className='sn-mypage';mypage.href=url('ku-fudo-chat/mypage.php');mypage.textContent='マイページ';mypage.setAttribute('aria-label','マイページを開く');bar.append(mypage);
 const menu=document.createElement('details');menu.className='sn-menu';
 const summary=document.createElement('summary');summary.textContent='☰ メニュー';summary.setAttribute('aria-controls','sn-panel');menu.append(summary);
 const panel=document.createElement('div');panel.id='sn-panel';panel.className='sn-panel';
 const mainNav=document.createElement('nav');mainNav.setAttribute('aria-label','サイトメニュー');mainNav.className='sn-links';
-const links=[['ku-fudo-demo/','トップページ'],['ku-fudo-demo/meditation.html','瞑想の会'],['ku-fudo-chat/mypage.php','マイページ'],['ku-fudo-chat/','チャット'],['ku-fudo-chat/?room=all#zoom-schedule','Zoom会議の予定'],['ku-fudo-demo/#curriculum','カリキュラム'],['ku-fudo-smartoon/','漫画空不動の歩み'],['ku-fudo-chat/redo.php','REDO MAIL'],['ku-fudo-chat/prayer.php','祈りの蓄積'],['ku-fudo-chat/?account=1#account','アカウント']];
+const links=[['ku-fudo-demo/','トップページ'],['ku-fudo-demo/meditation.html','瞑想の会'],['ku-fudo-chat/mypage.php','マイページ（記録・登録情報）'],['ku-fudo-chat/','チャット'],['ku-fudo-chat/?room=all#zoom-schedule','Zoom会議の予定'],['ku-fudo-demo/#curriculum','カリキュラム'],['ku-fudo-smartoon/','漫画：空不動先生の歩み'],['ku-fudo-smartoon/tougyou/','漫画：統一行のやり方'],['ku-fudo-chat/redo.php','REDO MAIL'],['ku-fudo-chat/prayer.php','祈りの蓄積'],['ku-fudo-chat/?account=1#account','アカウント']];
 for(const [p,t] of links){const a=document.createElement('a');a.href=url(p);a.textContent=t;mainNav.append(a);}
 panel.append(mainNav);const extras=document.createElement('nav');extras.className='sn-links sn-extras';extras.setAttribute('aria-label','このページのメニュー');panel.append(extras);
 const close=document.createElement('button');close.type='button';close.className='sn-close';close.textContent='メニューを閉じる';close.addEventListener('click',()=>{menu.open=false;summary.focus();});panel.append(close);menu.append(panel);bar.append(menu);document.body.prepend(bar);
