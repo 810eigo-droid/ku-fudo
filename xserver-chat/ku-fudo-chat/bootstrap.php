@@ -46,12 +46,21 @@ $sessions = $private . '/sessions';
 if (!is_dir($sessions) && !mkdir($sessions, 0700) && !is_dir($sessions)) { fail('保存先を準備できません。', 503); }
 ini_set('session.use_strict_mode', '1');
 ini_set('session.use_only_cookies', '1');
-ini_set('session.gc_maxlifetime', '2592000');
+const REMEMBER_LOGIN_SECONDS = 31536000; // Renewed with use; one year of inactivity.
+ini_set('session.gc_maxlifetime', (string) REMEMBER_LOGIN_SECONDS);
 session_save_path($sessions);
 session_name('KU_FUDO_CHAT');
 session_set_cookie_params(['lifetime' => 0, 'path' => '/ku-fudo-chat/', 'secure' => true, 'httponly' => true, 'samesite' => 'Strict']);
 session_start();
-if (isset($_SESSION['signed_at']) && time() - (int)$_SESSION['signed_at'] >= min(2592000, (int)($_SESSION['lifetime'] ?? 43200))) { $_SESSION = []; session_regenerate_id(true); }
+// Legacy 30-day sessions must still be valid before upgrading on their next visit.
+function loginSessionExpired(array $session, int $now): bool {
+    if (!isset($session['signed_at'])) { return false; }
+    if (($session['remember'] ?? false) === true) {
+        return $now - (int)($session['last_seen'] ?? $session['signed_at']) >= REMEMBER_LOGIN_SECONDS;
+    }
+    return $now - (int)$session['signed_at'] >= min(2592000, (int)($session['lifetime'] ?? 43200));
+}
+if (loginSessionExpired($_SESSION, time())) { $_SESSION = []; session_regenerate_id(true); }
 if (!isset($_SESSION['csrf'])) { $_SESSION['csrf'] = bin2hex(random_bytes(32)); }
 $db = new PDO('sqlite:' . $private . '/chat.sqlite', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]);
 $db->exec('PRAGMA foreign_keys=ON');
@@ -139,6 +148,20 @@ function currentUser(): ?array {
     if (!$user || !(int)$user['active'] || (int)$user['version'] !== (int)($_SESSION['version'] ?? 0)) {
         unset($_SESSION['uid'], $_SESSION['version']); return null;
     }
+    // Refresh only after membership and password-version checks succeed.
+    $remember = ($_SESSION['remember'] ?? null) === true
+        || (!array_key_exists('remember', $_SESSION) && (int)($_SESSION['lifetime'] ?? 0) === 2592000);
+    if ($remember) {
+        $now = time();
+        $_SESSION['remember'] = true;
+        $_SESSION['lifetime'] = REMEMBER_LOGIN_SECONDS;
+        $_SESSION['last_seen'] = $now;
+        // Renew the browser cookie daily, not on every chat poll.
+        if ($now - (int)($_SESSION['cookie_renewed_at'] ?? 0) >= 86400) {
+            setcookie('KU_FUDO_CHAT', session_id(), ['expires'=>$now+REMEMBER_LOGIN_SECONDS,'path'=>'/ku-fudo-chat/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);
+            $_SESSION['cookie_renewed_at'] = $now;
+        }
+    }
     return $user;
 }
 function publicUser(array $user): array {
@@ -183,8 +206,8 @@ function limitAttempt(string $bucket, int $max, int $seconds): void {
 }
 function signIn(array $user, bool $remember = false, string $method = 'password'): void {
     session_regenerate_id(true);
-    $lifetime = $remember ? 2592000 : 43200;
-    $_SESSION = ['uid' => (int)$user['id'], 'version' => (int)$user['version'], 'signed_at' => time(), 'lifetime' => $lifetime, 'login_method' => $method, 'csrf' => bin2hex(random_bytes(32))];
+    $lifetime = $remember ? REMEMBER_LOGIN_SECONDS : 43200;
+    $_SESSION = ['uid' => (int)$user['id'], 'version' => (int)$user['version'], 'signed_at' => time(), 'lifetime' => $lifetime, 'remember' => $remember, 'last_seen' => time(), 'cookie_renewed_at' => time(), 'login_method' => $method, 'csrf' => bin2hex(random_bytes(32))];
     setcookie('KU_FUDO_CHAT',session_id(),['expires'=>$remember ? time()+$lifetime : 0,'path'=>'/ku-fudo-chat/','secure'=>true,'httponly'=>true,'samesite'=>'Strict']);
 }
 // Only the hash is stored. A link is valid for 72 hours, once, for one current membership version.
@@ -235,3 +258,4 @@ function sendApprovalMail(int $id): string {
     query('UPDATE approval_mail SET status=? WHERE id=?',[$status,$id]);
     return $status;
 }
+
