@@ -1,0 +1,56 @@
+{
+  "mode": "built-in image_gen",
+  "reference": "smartoon/episode-01/assets/panel-02.webp",
+  "panels": [
+    {
+      "panel": 1,
+      "title": "現代人の悩み（頭の中のパンク）",
+      "prompt": "The recurring reader character, an ordinary Japanese adult with short dark-brown hair, a grey-blue crewneck sweatshirt and beige trousers, sits at a desk with a laptop and smartphone, holding their head. Three dark loosely swirling clouds suggest work, relationships and uncertainty. Show the person partly in silhouette but retain recognizable hair and clothing. Muted blue-grey evening room, warm beige desk. Medium-wide three-quarter view. Leave clear space above for narration; do not draw labels or speech bubbles."
+    },
+    {
+      "panel": 2,
+      "title": "空不動（岩根）先生の登場と「統一行」の提示",
+      "prompt": "Ku-fudo stands centrally, facing the reader with the same modest reassuring smile as the established character reference. Waist-up view, relaxed shoulders, one hand open near waist level. Soft sky-blue daylight enters a warm illustrated study. His familiar glasses, swept hair and slender face must remain consistent. Keep the upper and lower edges visually quiet for later Japanese dialogue."
+    },
+    {
+      "panel": 3,
+      "title": "時間・場所のセッティング",
+      "prompt": "A quiet corner of a real Japanese home, a firm chair beside a window, a small plant and a simple timer on a side table. Wide establishing view with warm natural daylight and restrained sky-blue accents. Leave the timer display blank so '20:00' can be typeset afterward. Suggest a repeatable everyday setting with neatly put-away devices. No text, no numerals. Reserve a calm upper area for two short text blocks."
+    },
+    {
+      "panel": 4,
+      "title": "正しい姿勢（3つの座り方と脱力）",
+      "prompt": "One vertical instructional illustration showing three clearly separated full-body demonstrations by the SAME recurring reader character: seiza kneeling at the top, full lotus at the middle, and sitting on a firm straight chair at the bottom with both feet flat on the floor. Keep all three in the established semi-flat character style rather than faceless pictograms. Upright comfortable spine, relaxed shoulders, anatomically accurate legs and feet, no exaggerated posture. Three-quarter views, plain warm beige ground, ample spacing and empty areas for labels to be added later. No arrows or labels generated."
+    },
+    {
+      "panel": 5,
+      "title": "手の結び方（「印」の形）",
+      "prompt": "Close-up looking diagonally down at the recurring reader's two hands resting separately on their own knees, grey-blue sweatshirt cuffs and beige trousers visible. Each palm faces upward. On EACH hand the thumb tip touches the index fingertip to form one soft closed circle; middle, ring and little fingers remain naturally relaxed. Exactly five anatomically correct fingers per hand, correct left and right orientation, no interlocking hands. Make the finger contact unmistakable at smartphone size. Warm soft light and plain background, no symbols."
+    },
+    {
+      "panel": 6,
+      "title": "瞑想の入り方と心構え（気負わない）",
+      "prompt": "The same reader sits comfortably on the firm chair established earlier, feet on the floor, eyes gently closed, shoulders relaxed, palms upward on knees with thumb and index fingertips touching. Medium-wide left-facing three-quarter view. A faint warm gold and sky-blue wash descends from the upper window area as a poetic representation of inner experience. Retain the tangible room, plant and timer; do not depict a literal deity, halo, laser or supernatural figure. Generous negative space above."
+    },
+    {
+      "panel": 7,
+      "title": "雑念・現象への対処（重要なポイント）",
+      "prompt": "The same seated reader in a calm near-frontal medium view, eyes closed without strain. Soft grey thought-cloud shapes drift sideways past the person and gradually become translucent. Keep the person grounded in the same real room and chair, identical clothing and hand position. No pushing, fighting or distressed expression. The drifting clouds are visual metaphors. Quiet sky-blue background accents. Leave clean upper and lower space for dialogue."
+    },
+    {
+      "panel": 8,
+      "title": "『自明の光！』の照射",
+      "prompt": "A single poetic close scene of the same reader meditating in the familiar room as a broad soft honey-gold and muted mustard-yellow light suffuses the surrounding grey thought clouds, which gently dissolve into the sky-blue daylight. Keep warm white at the center without harsh contrast. The light represents an inner image, never a weapon, laser, explosion or externally verified event. Reader remains relaxed and anatomically normal. Reserve clear top-center space for the separately typeset Japanese phrase."
+    },
+    {
+      "panel": 9,
+      "title": "瞑想後の変化（命の充電）",
+      "prompt": "The SAME reader opens their eyes after meditation, with a small unforced refreshed smile and relaxed shoulders. Three-quarter close-to-medium view facing screen right, identical grey-blue sweatshirt and hairstyle. A very subtle warm glow near the chest represents the character's subjective feeling. Same chair and everyday room in soft morning daylight. Preserve facial identity from panel 1; no transformation of body, no battery icon and no clinical or scientific diagrams. Quiet lower margin for narration."
+    },
+    {
+      "panel": 10,
+      "title": "読者へのおすすめメッセージ（ラストショット）",
+      "prompt": "Ku-fudo faces the viewer in a welcoming final medium-full shot, extending one relaxed open hand toward the reader with mild perspective, the other arm resting naturally. Identical established face, glasses, swept hair, tall very slim proportions and navy suit. A bright ordinary garden beyond the study window, soft sky-blue and warm gold daylight. Modest reassuring smile, no exaggerated charisma or heroic pose. Keep the extended hand anatomically correct and fully visible. Leave ample clean space at top and bottom for final dialogue."
+    }
+  ]
+}
