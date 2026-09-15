@@ -5,3 +5,6 @@
 /* A direct, always visible member entrance on phones. */
 @media(max-width:720px){.sn-bar{gap:8px;padding:6px 10px}.sn-bar a.sn-home{font-size:14px;white-space:nowrap}.sn-bar a.sn-mypage{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 12px;border-radius:6px;background:#dfc58e;color:#142c40;font-size:15px;font-weight:700;white-space:nowrap;margin-left:auto}.sn-menu>summary{font-size:14px;padding:0 10px;white-space:nowrap}.sn-bar a.sn-mypage:hover{background:#edd8aa}}
 @media(max-width:360px){.sn-bar{gap:6px;padding-left:8px;padding-right:8px}.sn-bar a.sn-mypage{font-size:14px;padding:0 9px}.sn-menu>summary{padding:0 8px}}
+
+/* Hide the mobile top-left text until a logo is available. */
+@media(max-width:720px){.sn-bar a.sn-home{display:none}}
