@@ -20,5 +20,14 @@ r=await run(1,'learning.php',{...data,revision:'1',note:'a'.repeat(5001)});asser
 r=await run(1,'learning.php',{csrf:jars[1].csrf,lesson_id:data.lesson_id,revision:'1',note:''});assert.equal(r.httpStatusCode,303);
 r=await run(1);assert(r.text.includes('<strong>0</strong>'));assert(!r.text.includes('私だけの気づき'));
 const relog=await run(2,'seed.php?id=2');jars[2].csrf=JSON.parse(relog.text).csrf;r=await run(2);assert(r.text.includes('二人目のメモ'));
-r=await run('anon','learning-admin.php');assert.equal(r.httpStatusCode,401);r=await run(1,'learning-admin.php');assert.equal(r.httpStatusCode,403);r=await run(3,'learning-admin.php');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(r.text.includes('1 / 6 レッスン'));assert(!r.text.includes('二人目のメモ'));r=await run(3,'learning-admin.php?q='+encodeURIComponent('テスト2'));assert(r.text.includes('テスト2さん'));assert(!r.text.includes('テスト1さん'));r=await run(3,'learning-admin.php',{any:'data'});assert.equal(r.httpStatusCode,405);console.log('PASS: admin authorization, progress-only view and name search;  anonymous protection, per-user isolation, persistence after login, CSRF, stale-edit conflict, escaped memo, validation, uncheck and clearing.');
+r=await run('anon','learning-admin.php');assert.equal(r.httpStatusCode,401);r=await run(1,'learning-admin.php');assert.equal(r.httpStatusCode,403);r=await run(3,'learning-admin.php');assert.equal(r.httpStatusCode,200,r.text+r.errors);assert(r.text.includes('1 / 6 レッスン'));assert(!r.text.includes('二人目のメモ'));r=await run(3,'learning-admin.php?q='+encodeURIComponent('テスト2'));assert(r.text.includes('テスト2さん'));assert(!r.text.includes('テスト1さん'));r=await run(3,'learning-admin.php',{any:'data'});assert.equal(r.httpStatusCode,405);// A newly registered curriculum appears in both views without losing earlier notes.
+const catalog=app+'/learning-catalog.php';
+fs.writeFileSync(catalog,fs.readFileSync(catalog,'utf8').replace('\n]\nJSON',',\n'+JSON.stringify({id:'future-lesson-01',title:'追加講座',course:'追加カリキュラム',url:'https://example.com/lesson'})+'\n]\nJSON'));
+r=await run(2);assert(r.text.includes('追加講座'));assert(r.text.includes('二人目のメモ'));assert(r.text.includes('/ 7 レッスン'));
+r=await run(2,'learning.php',{csrf:jars[2].csrf,lesson_id:'future-lesson-01',revision:'0',watched:'1',note:'追加講座のメモ'});assert.equal(r.httpStatusCode,303,r.text+r.errors);
+r=await run(2);assert(r.text.includes('追加講座のメモ'));assert(r.text.includes('二人目のメモ'));
+r=await run(3,'learning-admin.php');assert(r.text.includes('2 / 7 レッスン'));assert(r.text.includes('追加講座'));assert(!r.text.includes('追加講座のメモ'));
+r=await run(2,'mypage.php');assert(r.text.includes('カリキュラムの視聴記録・メモ'));assert(!r.text.includes('カリキュラムを見る'));
+console.log('PASS: new curriculum, dynamic totals, existing notes preserved, new notes persisted, My Page link consolidation.');
+console.log('PASS: admin authorization, progress-only view and name search;  anonymous protection, per-user isolation, persistence after login, CSRF, stale-edit conflict, escaped memo, validation, uncheck and clearing.');
 }finally{php.exit();fs.rmSync(temp,{recursive:true,force:true});}
