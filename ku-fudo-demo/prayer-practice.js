@@ -1,0 +1,12 @@
+(()=>{'use strict';
+const text=document.querySelector('#prayer-text');
+const prayer=Array.from(text.querySelectorAll('p'),p=>p.innerText).join('\n');
+const status=document.querySelector('#tool-status');
+const copy=document.querySelector('#copy-prayer');
+const large=document.querySelector('#large-text');
+const print=document.querySelector('#print-prayer');
+for(const button of [copy,large,print])button.hidden=false;
+copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(prayer);status.textContent='祈りの全文をコピーしました。メモなどに貼り付けられます。';document.querySelector('#copy-fallback').hidden=true;}catch{const field=document.querySelector('#copy-text');document.querySelector('#copy-fallback').hidden=false;field.value=prayer;field.focus();field.select();status.textContent='コピー用の全文を表示しました。選択した文章をコピーしてください。';}});
+large.addEventListener('click',()=>{const enlarged=text.classList.toggle('large');large.setAttribute('aria-pressed',String(enlarged));large.textContent=enlarged?'文字を元の大きさに戻す':'文字を大きくする';});
+print.addEventListener('click',()=>{status.textContent='印刷画面で「PDFに保存」を選ぶと、祈りの言葉を保存できます。';window.print();});
+})();
