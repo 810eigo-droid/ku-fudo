@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__ . '/bootstrap.php';
+require __DIR__ . '/registration-lib.php';
 $action = $_GET['action'] ?? 'state';
 if (!is_string($action)) { fail('操作が不正です。'); }
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
@@ -61,18 +62,14 @@ if (strlen($raw)>24000) { fail('入力が大きすぎます。',413); }
 $data = json_decode($raw,true);
 if (!is_array($data)) { fail('入力形式が不正です。'); }
 if ($action === 'register') {
-    if (!query("SELECT 1 FROM users WHERE role='admin' AND active=1 LIMIT 1")->fetchColumn()) { fail('現在、申し込みを受け付けていません。',403); }
-    if (currentUser()) { fail('ログアウトしてからお申し込みください。',403); }
+    if (currentUser()) { fail('ログイン中です。マイページからご利用ください。',403); }
     limitAttempt('register:'.hash('sha256',(string)($_SERVER['REMOTE_ADDR'] ?? 'unknown')),10,3600);
     $login=loginValue($data);$name=value($data,'name',60,true);$password=passwordValue($data);
-    $db->beginTransaction();
-    query('DELETE FROM applications WHERE created_at<?',[time()-2592000]);
-    // Repeated requests never replace a password or alter an existing membership.
-    if (!query('SELECT 1 FROM users WHERE login=?',[$login])->fetchColumn() && !query('SELECT 1 FROM applications WHERE login=?',[$login])->fetchColumn()) {
-        if ((int)query('SELECT count(*) FROM applications')->fetchColumn()>=500) { fail('申し込みが混み合っています。管理者にご連絡ください。',429); }
-        query('INSERT INTO applications(login,name,password,created_at) VALUES(?,?,?,?)',[$login,$name,password_hash($password,PASSWORD_DEFAULT),time()]);
-    }
-    $db->commit();output(['ok'=>true]);
+    $remember=$data['remember'] ?? false;
+    if (!is_bool($remember)) { fail('ログイン設定を確認してください。'); }
+    $user=registerFreeMember($login,$name,$password);
+    signIn($user,$remember);
+    output(['ok'=>true,'csrf'=>$_SESSION['csrf']]);
 }
 if ($action === 'link_login') {
     limitAttempt('link-auth:'.hash('sha256',(string)($_SERVER['REMOTE_ADDR'] ?? 'unknown')),20,900);
@@ -98,6 +95,7 @@ if ($action === 'link_login') {
 if ($action === 'setup' || $action === 'login') {
     $ip = hash('sha256', (string)($_SERVER['REMOTE_ADDR'] ?? 'unknown'));
     limitAttempt('auth:'.$ip, 20, 900);
+    if (array_key_exists('remember',$data) && !is_bool($data['remember'])) { fail('ログイン設定を確認してください。'); }
     $login = loginValue($data, $action === 'login'); $password = passwordValue($data, $action !== 'login');
     if ($action === 'setup') {
         if (query('SELECT 1 FROM users LIMIT 1')->fetchColumn()) { fail('初期設定は完了しています。',403); }
@@ -117,7 +115,7 @@ if ($action === 'setup' || $action === 'login') {
         $user=query('SELECT * FROM users WHERE login=?',[$login])->fetch();
         if (!$user) {
             $pending=query('SELECT password FROM applications WHERE login=?',[$login])->fetchColumn();
-            if ($pending && password_verify($password,$pending)) { fail('現在、管理者の承認待ちです。承認の連絡をお待ちください。',403); }
+            if ($pending && password_verify($password,$pending)) { $user=registerFreeMember($login,'',$password); }
         }
         $hash=$user['password'] ?? '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2uheWG/igi.';
         if (!password_verify($password,$hash) || !$user || !(int)$user['active']) { fail('メールアドレス（従来のID）またはパスワードを確認してください。',401); }
