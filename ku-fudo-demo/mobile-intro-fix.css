@@ -18,3 +18,13 @@
  .portrait-book-link:hover{background:#f1e5c9}
  .portrait-book-link:focus-visible{outline:3px solid #315e77;outline-offset:3px}
 }
+
+/* Match the introductory copy to the top of the portrait on phones. */
+.intro-top-copy{display:contents}
+.mobile-welcome-title{display:none}
+@media(max-width:720px){
+ .heading.entrance-heading{align-items:start}
+ .entrance-heading .intro-top-copy{display:block;grid-column:1;grid-row:1;min-width:0}
+ .entrance-heading .mobile-welcome-title{display:block;margin:18px 0 0;color:#203448;font-size:18px;line-height:1.75}
+ .entrance-heading .welcome-lead>strong,.entrance-heading .welcome-lead>br:first-of-type{display:none}
+}
