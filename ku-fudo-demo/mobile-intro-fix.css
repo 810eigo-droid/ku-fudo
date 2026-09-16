@@ -1,12 +1,20 @@
 /* Preserve the desktop introduction; simplify only the phone layout. */
-.mobile-teacher-link{display:none}
+.mobile-teacher-link,.portrait-book-link{display:none}
 @media(max-width:720px){
- .heading.entrance-heading{display:grid;grid-template-columns:minmax(0,1fr) 88px;gap:10px 12px;align-items:center}
+ .heading.entrance-heading{display:grid;grid-template-columns:minmax(0,1fr) 136px;gap:10px 12px;align-items:center}
  .entrance-heading>div{display:contents}
  .entrance-heading h1{grid-column:1;grid-row:1;margin:0}
- .entrance-heading .teacher-portrait{grid-column:2;grid-row:1;width:88px;margin:0}
+ .entrance-heading .teacher-portrait{grid-column:2;grid-row:1;width:136px;margin:0}
  .entrance-heading .teacher-portrait figcaption{display:none}
  .entrance-heading .welcome-lead{grid-column:1/-1;grid-row:2;margin:0;line-height:1.8}
  .entrance-heading .mobile-teacher-link{grid-column:1/-1;grid-row:3;display:flex;align-items:center;justify-self:start;min-height:44px;padding:4px 0;font-size:15px;color:#536676;text-decoration:underline;text-underline-offset:4px}
  .mobile-teacher-link:focus-visible{outline:3px solid #9d6c18;outline-offset:3px}
+}
+
+@media(max-width:720px){
+ .entrance-heading .teacher-portrait img{margin:0 auto}
+ .entrance-heading .portrait-book-link{display:flex;flex-direction:column;justify-content:center;gap:4px;min-height:64px;margin-top:10px;padding:10px 6px;background:#faf5e9;border:1px solid #c5a059;border-radius:6px;color:#1a2a3a;font-size:13px;line-height:1.6;text-align:center;text-decoration:none}
+ .portrait-book-link strong{font-size:13px}
+ .portrait-book-link:hover{background:#f1e5c9}
+ .portrait-book-link:focus-visible{outline:3px solid #315e77;outline-offset:3px}
 }
