@@ -25,5 +25,9 @@ document.getElementById('copy-mail').addEventListener('click',async()=>{
  try{await navigator.clipboard.writeText(draft.value);status.textContent='文面をコピーしました。宛先は '+address+' です。';}
  catch{draft.focus();draft.select();status.textContent='文面を選択しました。コピーしてメールに貼り付けてください。';}
 });
+document.querySelectorAll('[data-inquiry-topic]').forEach(link=>{link.addEventListener('click',()=>{
+ const topic=link.dataset.inquiryTopic;
+ if(Array.from(form.elements.topic.options).some(option=>option.value===topic)){form.elements.topic.value=topic;result.hidden=true;status.textContent='レインボークラブについての相談を選択しました。必要に応じて内容を入力してください。';}
+});});
 form.addEventListener('input',()=>{if(!result.hidden){result.hidden=true;status.textContent='内容を変更しました。「相談メールの文面を作る」をもう一度押してください。';}});
 })();

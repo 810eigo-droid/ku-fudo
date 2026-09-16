@@ -8,3 +8,7 @@
 
 /* Hide the mobile top-left text until a logo is available. */
 @media(max-width:720px){.sn-bar a.sn-home{display:none}}
+
+/* Standalone practice guide: keep its reading tabs below the mobile menu. */
+@media(max-width:720px){.sn-ready .page-tabs{top:56px}.sn-ready #choose-title{scroll-margin-top:130px}}
+@media print{.sn-bar,.sn-top{display:none!important}}
