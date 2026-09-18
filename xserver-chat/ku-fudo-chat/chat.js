@@ -11,6 +11,12 @@ let restoredPosition=false,visiblePages=0;
 let returnPosition=history.state?.chatPosition;
 // Keep the credential out of subsequent requests, referrers, history and bookmarks.
 if(new URLSearchParams(location.hash.slice(1)).has('invite'))history.replaceState(null,'',location.pathname+location.search);
+// Keep the intended destination when switching between registration and login.
+const loginParams=new URLSearchParams(location.search);loginParams.delete('register');
+if(!loginParams.size)loginParams.set('next','mypage.php');
+document.querySelectorAll('[data-auth-login]').forEach(a=>a.href='?'+loginParams);
+const registerParams=new URLSearchParams(loginParams);registerParams.set('register','1');
+document.querySelectorAll('[data-auth-register]').forEach(a=>a.href='?'+registerParams);
 function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
 function node(tag,text,className){const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;}
 function clearPrivate(){requestGeneration++;user=null;['chat-panel','account','admin-panel','navigation','next-zoom','materials-panel','material-editor-section','material-admin-actions'].forEach(id=>$(id).hidden=true);['messages','events','users','identity','next-zoom-date','next-zoom-title','applications','submissions','own-submissions','approval-mails','materials-list','material-title','material-body','materials-membership'].forEach(id=>$(id).replaceChildren());$('material-resource').removeAttribute('href');$('material-resource').hidden=true;$('material-form').reset();currentMaterial=null;$('email-form').reset();$('password-form').reset();postForm.reset();clearReply();$('credential').textContent='';$('credential-user').textContent='';credentialText='';if($('credential-dialog').open)$('credential-dialog').close();}
@@ -33,6 +39,7 @@ async function start(){
  fetch('operations.php?access=1',{credentials:'same-origin',cache:'no-store'}).then(r=>{if(!r.ok)throw Error();return r.json();}).then(p=>{if(user&&!Number(user.must_change)){$('minutes-link').hidden=!p.board;$('district-notice-link').hidden=!p.notice;}}).catch(()=>{});
  $('board-button').hidden=user.role==='member';$('kind-label').hidden=user.role!=='admin';
  if(required){status('初回パスワードを変更してください。');return;}
+ if(new URLSearchParams(location.search).get('register')==='1'){location.replace('mypage.php');return;}
  const nextPage=new URLSearchParams(location.search).get('next');if(['mypage.php','admin.php','learning.php','admin-search.php'].includes(nextPage)){location.replace(nextPage);return;}
  if(new URLSearchParams(location.search).has('prayer')){const month=new URLSearchParams(location.search).get('month')||'';location.replace('prayer.php'+(/^20\d{2}-(0[1-9]|1[0-2])$/.test(month)?'?month='+month:''));return;}
  if(new URLSearchParams(location.search).has('redo')){const redoId=Number(new URLSearchParams(location.search).get('redo'));location.replace('redo.php'+(Number.isSafeInteger(redoId)&&redoId>0?'?id='+redoId:''));return;}
@@ -91,7 +98,7 @@ $('invite-current').onclick=()=>{pendingInvite='';start().catch(e=>status(e.mess
 $('invite-cancel').onclick=()=>{pendingInvite='';start().catch(e=>status(e.message,true));};
 $('invite-switch').onclick=async()=>{try{await api('logout',{});clearPrivate();await start();}catch(e){status(e.message,true);}};
 bindForm('login-form',async form=>{await api('login',{...formData(form),remember:form.elements.remember.checked});form.reset();await start();});
-bindForm('register-form',async form=>{await api('register',{...formData(form),remember:form.elements.remember.checked});location.replace('mypage.php');});
+bindForm('register-form',async form=>{await api('register',{...formData(form),remember:form.elements.remember.checked});form.reset();$('register-password').type='password';form.hidden=true;$('register-intro').hidden=true;$('register-success').hidden=false;status('');$('register-success').focus();});
 $('show-register-password').onchange=event=>{$('register-password').type=event.target.checked?'text':'password';};
 $('applications-refresh').onclick=()=>loadApplications().catch(e=>status(e.message,true));
 async function loadApplications(){await loadApprovalMails();const result=await api('applications');$('applications').replaceChildren();if(!result.applications.length){$('applications').append(node('p','新しい申し込みはありません。'));return;}for(const a of result.applications){const row=node('div',undefined,'user-row');row.append(node('b',a.name),node('p',a.login));const memberLabel=node('label','承認する会員区分');const memberSelect=node('select');for(const [value,label] of Object.entries(membershipNames)){const o=node('option',label);o.value=value;memberSelect.append(o);}memberLabel.append(memberSelect);row.append(memberLabel);const actions=node('div',undefined,'user-actions');for(const [action,label] of [['application_approve','承認する'],['application_reject','申し込みを削除']]){const button=node('button',label,action==='application_approve'?'primary':'secondary');button.type='button';button.onclick=async()=>{if(!confirm(a.name+' さん（'+a.login+'）の申し込みを'+(action==='application_approve'?'承認して'+membershipNames[memberSelect.value]+'として登録':'削除')+'しますか？'))return;button.disabled=true;try{const result=await api(action,{id:Number(a.id),membership:memberSelect.value});await loadUsers();status(action==='application_approve'?a.name+' さんを承認しました。'+mailResultText(result.mail_status):'申し込みを削除しました。',action==='application_approve'&&result.mail_status!=='sent');}catch(e){status(e.message,true);}finally{button.disabled=false;}};actions.append(button);}row.append(actions);$('applications').append(row);}}

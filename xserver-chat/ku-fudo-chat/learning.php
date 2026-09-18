@@ -39,7 +39,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-sr
 <nav aria-label="メニュー"><a href="../ku-fudo-demo/">トップへ戻る</a><a href="./">チャット</a><a href="mypage.php">マイページ</a><a href="./?account=1">アカウント</a></nav><main>
 <h1>カリキュラムの視聴記録・メモ</h1>
 <?php if (!$ready): ?>
-<section class="card"><h2>ログインして記録を開く</h2><p>登録したメールアドレスとパスワードでログインしてください。初回パスワード変更の案内が出た場合は、変更を済ませてください。</p><a class="primary" href="./?account=1&next=learning.php">ログイン画面を開く</a><p>ログイン後、このページが開きます。</p><a class="secondary" href="learning.php">マイページを開く</a></section>
+<section class="card"><h2>ログインして記録を開く</h2><p>登録したメールアドレスとパスワードでログインしてください。初回パスワード変更の案内が出た場合は、変更を済ませてください。</p><a class="primary" href="./?account=1&next=learning.php">登録済みの方はこちら（ログイン）</a><p>ログイン後、このページが開きます。</p><a class="secondary" href="./?register=1&amp;next=learning.php">初めての方はこちら（新規登録）</a></section>
 <?php else: ?>
 <p><?= $escape($u['name']) ?>さんの記録です。メモはチャットに公開されません。</p>
 <p class="learning-disclosure">コースのご案内のため、管理者が視聴状況を確認します。自分のメモは管理画面には表示されません。</p>
@@ -47,6 +47,7 @@ header("Content-Security-Policy: default-src 'self'; script-src 'self'; style-sr
 <section class="progress"><h2>カリキュラム全体の視聴状況</h2><p><strong><?= $count ?></strong> / <?= count($lessons) ?> レッスン視聴済み</p><progress value="<?= $count ?>" max="<?= max(1,count($lessons)) ?>"><?= $count ?>/<?= count($lessons) ?></progress></section>
 <p>視聴済みにチェックし、気づいたことを書いて「保存する」を押してください。あとからメモを追記・編集できます。新しいカリキュラムも、この一覧に順次追加されます。</p>
 <?php if ($error): ?><p class="alert" role="alert"><?= $escape($error) ?></p><?php endif; ?>
+<p>高評価・チャンネル登録には、会員サイトとは別のGoogleアカウントでのログインが必要です。</p>
 <?php foreach($lessons as $i=>$l): $id=$l['id'];$row=$records[$id] ?? ['watched'=>0,'note'=>'','revision'=>0];if (($posted['lesson_id'] ?? '')===$id) { $row=$posted; } ?>
 <section class="card" id="lesson-<?= $escape($id) ?>"><span class="number"><?= $escape($l['course']) ?> · レッスン <?= $i+1 ?></span><h2><?= $escape($l['title']) ?></h2>
 <a class="secondary" href="<?= $escape($l['url']) ?>" target="_blank" rel="noopener noreferrer">動画を見る（別のタブ） →</a>
